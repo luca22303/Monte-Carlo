@@ -19,11 +19,11 @@ def _compare(cfg_json: str):
 
 
 df, results = _compare(cfg.model_dump_json())
-st.plotly_chart(box_by_variant(results, "Net wealth at the end, by strategy"), use_container_width=True)
+st.plotly_chart(box_by_variant(results, "Net wealth at the end, by strategy"), width="stretch")
 
 keys = ["real_wealth_p5", "real_wealth_p50", "real_wealth_p95", "real_wealth_cvar5", "p_goal", "irr_real_p50",
         "mdd_p95", "share_negative_years", "taxes_real", "fees_real", "turnover_real", "rebalances_p50"]
-st.dataframe(metrics_table({k: v.to_dict() for k, v in df.iterrows()}, keys), use_container_width=True)
+st.dataframe(metrics_table({k: v.to_dict() for k, v in df.iterrows()}, keys), width="stretch")
 
 st.subheader("Paired difference vs. a baseline")
 labels = list(results)
@@ -36,5 +36,5 @@ for lab in labels:
     rows.append({"Strategy": lab, "Mean difference": eur(d["mean"]), "± std. error": eur(d["se"]),
                  "Better on share of paths": f"{d['share_a_better']:.0%}",
                  "P5 of difference": eur(d["p5"]), "P95 of difference": eur(d["p95"])})
-st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 st.caption("A mean difference of more than about 2–3 standard errors is a real effect, not luck of the draw.")

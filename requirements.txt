@@ -5,4 +5,4 @@ scipy>=1.11
 pandas>=2.1
 pydantic>=2.5
 plotly>=5.18
-streamlit>=1.40
+streamlit>=1.50

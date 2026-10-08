@@ -21,7 +21,7 @@ default = st.session_state.get("review_holdings") or {
 }
 with st.form("review"):
     df = st.data_editor(pd.DataFrame(default), hide_index=True, disabled=["Asset", "key"],
-                        column_config={"key": None}, use_container_width=True)
+                        column_config={"key": None}, width="stretch")
     c = st.columns(3)
     years = c[0].number_input("Years remaining", 1, 60, cfg.plan.horizon_years)
     allowance_left = c[1].number_input("Unused Sparerpauschbetrag this year (€)", 0.0, 2000.0, cfg.tax.allowance)
@@ -58,14 +58,14 @@ fig.update_layout(barmode="group", bargap=0.3, bargroupgap=0.08)
 fig = _layout(fig, "Current vs. target weights", "", "Weight", height=320)
 fig.update_xaxes(tickformat=".0%")
 fig.update_yaxes(autorange="reversed")
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 c = st.columns(2)
 with c[0]:
     st.markdown("**Next month's savings: split**")
     st.dataframe(pd.DataFrame({"Asset": [names[k] for k in keys],
                                "Buy €": [eur(out.next_savings_split[k]) for k in keys]}),
-                 hide_index=True, use_container_width=True)
+                 hide_index=True, width="stretch")
     m = out.months_to_target_by_savings
     st.caption("Months of savings to reach target without selling: "
                + ("already on target" if m == 0 else "∞ (no savings)" if m == float("inf") else f"{m:.1f}"))
@@ -74,7 +74,7 @@ with c[1]:
         st.markdown("**Trades back to target** (+ buy / − sell)")
         st.dataframe(pd.DataFrame({"Asset": [names[k] for k in out.trades],
                                    "Trade €": [f"{v:+,.0f}" for v in out.trades.values()]}),
-                     hide_index=True, use_container_width=True)
+                     hide_index=True, width="stretch")
         st.caption(f"Estimated tax on the sales: {eur(out.trade_tax_estimate)} (average-cost basis, "
                    "gold assumed held > 1 year). If cash-flow steering gets back to target within a few "
                    "months, waiting is usually cheaper than paying this tax.")
@@ -82,7 +82,7 @@ with c[1]:
 if res is not None:
     st.subheader("Outlook from today")
     kpi_row(out.summary, cfg.goal_real)
-    st.plotly_chart(fan_chart(res, cfg.goal_real, "Wealth from today (today's €)"), use_container_width=True)
+    st.plotly_chart(fan_chart(res, cfg.goal_real, "Wealth from today (today's €)"), width="stretch")
 
 st.download_button("Download review snapshot (JSON)", out.to_json(), f"review_{out.date}.json",
                    "application/json")

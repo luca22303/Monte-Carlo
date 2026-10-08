@@ -73,7 +73,7 @@ with st.form("setup"):
                                  0.01, format="%.2f")
     ter_df = pd.DataFrame({"Asset": [a.name for a in cfg.assets], "TER % p.a.": [a.ter * 100 for a in cfg.assets]})
     with st.expander("Fund costs (TER) per asset"):
-        ter_df = st.data_editor(ter_df, disabled=["Asset"], hide_index=True, use_container_width=True)
+        ter_df = st.data_editor(ter_df, disabled=["Asset"], hide_index=True, width="stretch")
 
     st.subheader("Simulation engine")
     c = st.columns(4)
@@ -151,7 +151,7 @@ st.dataframe(pd.DataFrame({"Asset": [a.name for a in cfg.assets],
                            "Weight": [f"{cfg.weights.get(a.key, 0):.1%}" for a in cfg.assets],
                            "Tax class": [a.tax_class for a in cfg.assets],
                            "TER": [f"{a.ter:.2%}" for a in cfg.assets]}),
-             hide_index=True, use_container_width=True)
+             hide_index=True, width="stretch")
 
 st.subheader("Save / load configuration")
 c = st.columns(2)

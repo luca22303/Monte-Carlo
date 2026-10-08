@@ -1,0 +1,16 @@
+asset_key,isin,name,index,ter,fund_size_eur_m,distribution,replication,domicile,delivery_claim,use,note
+equity,IE00BK5BQT80,Vanguard FTSE All-World UCITS ETF (USD) Acc,FTSE All-World,0.0014,54914,Accumulating,Physical,Ireland,,1,World incl. emerging markets (~3700 stocks)
+equity,IE00B3YLTY66,SPDR MSCI ACWI IMI UCITS ETF (Acc),MSCI ACWI IMI,0.0017,8232,Accumulating,Physical,Ireland,,0,World incl. emerging markets and small caps
+equity,IE00B6R52259,iShares MSCI ACWI UCITS ETF (Acc),MSCI ACWI,0.0020,32149,Accumulating,Physical,Ireland,,0,World incl. emerging markets
+equity,IE00BJ0KDQ92,Xtrackers MSCI World UCITS ETF 1C,MSCI World,0.0012,21981,Accumulating,Physical,Ireland,,0,Developed markets only (no emerging markets)
+equity,IE00B4L5Y983,iShares Core MSCI World UCITS ETF (Acc),MSCI World,0.0020,133029,Accumulating,Physical,Ireland,,0,Developed markets only (no emerging markets)
+gov_bonds,LU0290355717,Xtrackers II Eurozone Government Bond UCITS ETF 1C,iBoxx EUR Sovereigns Eurozone,0.0007,2431,Accumulating,Physical,Luxembourg,,1,All maturities
+gov_bonds,IE00B4WXJJ64,iShares Core Euro Government Bond UCITS ETF (Dist),Bloomberg Euro Treasury Bond,0.0007,5380,Distributing,Physical,Ireland,,0,Pays out interest (reinvest by hand)
+linkers,IE00B0M62X26,iShares Euro Inflation Linked Government Bond UCITS ETF,Bloomberg Euro Govt Inflation-Linked Bond,0.0009,1855,Accumulating,Physical,Ireland,,1,
+linkers,LU1650491282,Amundi Euro Government Inflation-Linked Bond UCITS ETF Acc,Bloomberg Euro Govt Inflation-Linked Bond,0.0009,1322,Accumulating,Physical,Luxembourg,,0,
+linkers,LU0290358224,Xtrackers Eurozone Inflation-Linked Bond UCITS ETF 1C,Bloomberg Euro Govt Inflation-Linked Bond,0.0015,424,Accumulating,Physical,Luxembourg,,0,
+gold,DE000EWG2LD7,EUWAX Gold II,Gold,0.0,4323,Accumulating,Physical,Germany,1,1,Delivery claim: gains tax-free after 1 year (check with your tax advisor)
+gold,DE000A0S9GB0,Xetra-Gold,Gold,0.0,21017,Accumulating,Physical,Germany,1,0,Delivery claim; ask your broker about custody fees
+gold,IE00B4ND3602,iShares Physical Gold ETC,Gold,0.0012,34184,Accumulating,Physical,Ireland,0,0,No delivery claim: gains taxed at sale (flat tax)
+cash,,Tagesgeld (instant-access savings account),Overnight deposit,0.0,,,,Germany,,1,Standing order; deposit insurance up to €100k per bank
+cash,LU0290358497,Xtrackers II EUR Overnight Rate Swap UCITS ETF 1C,Solactive €STR +8.5 Daily,0.0010,23107,Accumulating,Synthetic,Luxembourg,,0,Money-market ETF (alternative to Tagesgeld)

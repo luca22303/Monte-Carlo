@@ -66,7 +66,7 @@ def estimate_sale_tax(cfg: SimConfig, sells: np.ndarray, values: np.ndarray, bas
         gain_share = np.where(values > 0, (values - basis) / values, 0.0)
     taxable = 0.0
     for a, s, g in zip(cfg.assets, sells, gain_share, strict=True):
-        if a.tax_class in FUND_CLASSES:
+        if a.tax_class in FUND_CLASSES or a.tax_class == "etc_taxable":
             taxable += s * g * (1.0 - PARTIAL_EXEMPTION[a.tax_class])
     return max(taxable - allowance_left, 0.0) * cfg.tax.flat_rate
 

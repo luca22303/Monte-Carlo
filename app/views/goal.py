@@ -54,6 +54,6 @@ fig.add_vline(x=cfg.plan.monthly, line={"color": muted, "dash": "dot"}, annotati
 fig = _layout(fig, "Probability of reaching the goal vs. monthly savings", "P(goal)", "Monthly savings (€)",
               height=380)
 fig.update_yaxes(tickformat=".0%", range=[0, 1.02])
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 st.dataframe(pd.DataFrame({"Monthly savings": [eur(x) for x in grid], "P(goal)": [f"{p:.0%}" for p in probs]}),
              hide_index=True)

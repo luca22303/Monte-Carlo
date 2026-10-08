@@ -16,7 +16,7 @@ sys.path.insert(0, str(APP))
 SMALL = SimConfig(n_paths=1000, plan=SavingsPlan(horizon_years=25)).model_dump_json()
 
 
-@pytest.mark.parametrize("page", ["setup", "simulation", "strategies", "explorer", "goal", "review",
+@pytest.mark.parametrize("page", ["setup", "simulation", "strategies", "explorer", "etfs", "goal", "review",
                                   "assumptions"])
 def test_page_renders(page):
     at = AppTest.from_file(str(APP / "views" / f"{page}.py"), default_timeout=240)
@@ -42,3 +42,13 @@ def test_setup_save_roundtrip():
     assert not at.exception, at.exception
     assert at.success, "expected a success message after saving"
     SimConfig.model_validate_json(at.session_state["cfg_json"])
+
+
+def test_etf_page_cost_simulation():
+    at = AppTest.from_file(str(APP / "views" / "etfs.py"), default_timeout=300)
+    at.session_state["cfg_json"] = SMALL
+    at.run()
+    btn = next(b for b in at.button if "cost impact" in b.label)
+    btn.click().run()
+    assert not at.exception, at.exception
+    assert "etf_costs_result" in at.session_state

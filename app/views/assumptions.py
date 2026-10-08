@@ -24,7 +24,7 @@ for k, rg in enumerate(mm.regimes):
                  "Equity vol": f"{rg.vol['equity']:.0%}", "Equity drift (vs. calm)": f"{rg.drift['equity']:+.0%}",
                  "Yield drift p.a.": f"{rg.drift['nominal_yield']:+.1%}",
                  "Inflation drift p.a.": f"{rg.drift['inflation']:+.1%}", "Tail df": f"{rg.df:g}"})
-st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 st.caption("Crisis regimes are short and violent; the inflation regime is the 2022 case where stocks and bonds "
            "fall together. Long-run averages are set separately, so regimes shape the risk without changing "
            "the expected return.")
@@ -55,7 +55,7 @@ tbl = pd.DataFrame({
     "History: worst 12m": h["worst_12m"].map("{:.0%}".format).to_numpy(),
     "Data": [hist.notes[a.key] for a in cfg.assets],
 })
-st.dataframe(tbl, hide_index=True, use_container_width=True)
+st.dataframe(tbl, hide_index=True, width="stretch")
 st.caption("History returns are higher than the model's on purpose. 1973–2025 started with 8 % bond yields, "
            "had falling rates for 40 years and a US-led equity boom. Today's starting yields are about 3 %. "
            "The model's volatilities should look like history's.")
@@ -74,7 +74,7 @@ for col, (title, mat) in zip(c, [
                                hovertemplate="%{y} / %{x}: %{z:.2f}<extra></extra>"))
     fig = _layout(fig, title, height=360)
     fig.update_yaxes(autorange="reversed")
-    col.plotly_chart(fig, use_container_width=True)
+    col.plotly_chart(fig, width="stretch")
 
 st.subheader("Your plan on actual history")
 st.caption("Your exact plan (savings, allocation, strategy, taxes) run on every historical window of your horizon "
@@ -99,7 +99,7 @@ try:
                       annotation_font_color=sec)
     fig = _layout(fig, "Net wealth (today's €) by start year vs. Monte Carlo percentiles", "€", "Start year",
                   height=380)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     st.markdown(f"Historical windows: median **{eur(hs['real_wealth_p50'])}**, worst **{eur(hr.real_final_net().min())}**, "
                 f"median real return **{hs['irr_real_p50']:.1%}** p.a. · Monte Carlo median "
                 f"**{eur(s['real_wealth_p50'])}** ({s['irr_real_p50']:.1%} p.a.).")

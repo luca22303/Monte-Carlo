@@ -17,14 +17,15 @@ FACTORS = ("equity", "gold", "nominal_yield", "real_yield", "short_rate", "infla
 N_FACTORS = len(FACTORS)
 
 AssetKind = Literal["equity", "nominal_bond", "linker", "gold", "cash"]
-TaxClass = Literal["equity_fund", "mixed_fund", "bond_fund", "gold_etc", "interest"]
+TaxClass = Literal["equity_fund", "mixed_fund", "bond_fund", "gold_etc", "etc_taxable", "interest"]
 
 # Teilfreistellung (InvStG §20) per tax class.
 PARTIAL_EXEMPTION: dict[str, float] = {
     "equity_fund": 0.30,
     "mixed_fund": 0.15,
     "bond_fund": 0.0,
-    "gold_etc": 0.0,
+    "gold_etc": 0.0,      # ETC with physical delivery claim: §23 EStG, tax-free after 1 year
+    "etc_taxable": 0.0,   # ETC without delivery claim: flat tax on gains at sale, no Vorabpauschale
     "interest": 0.0,
 }
 FUND_CLASSES = ("equity_fund", "mixed_fund", "bond_fund")

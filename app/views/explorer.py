@@ -23,7 +23,8 @@ with st.form("explore"):
     paths = c[2].select_slider("Paths per point", [500, 1000, 2000, 5000], 1000)
     risk_opts = ["mdd_p95", "real_wealth_p5", "p_real_loss", "cvar5_12m", "vol_annual"]
     risk = c[3].selectbox("Risk axis", risk_opts, format_func=lambda k: METRIC_LABELS[k][0])
-    st.markdown("**Caps** (max portfolio weight)")
+    st.markdown("**Maximum allowed weight per asset** – a limit for the search, *not* an allocation. "
+                "The search may still end up at 0 % for an asset.")
     cc = st.columns(len(def_assets))
     caps = {a.key: cc[i].number_input(a.name, 0.0, 1.0, {"gold": 0.15, "cash": 0.15}.get(a.key, 1.0), 0.05,
                                       key=f"cap_{a.key}") for i, a in enumerate(def_assets)}
@@ -63,7 +64,7 @@ fig = _layout(fig, "Median outcome vs. risk (outlined = efficient)", "Median net
               METRIC_LABELS[risk][0], height=480)
 if pct_risk:
     fig.update_xaxes(tickformat=".0%")
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 if len(df[eq_col].unique()) > 3:
     st.caption("Colours repeat beyond three equity levels; use the hover labels.")
 
@@ -77,7 +78,16 @@ for c in ("real_wealth_p50", "real_wealth_p5"):
 for c in ("mdd_p95", "irr_real_p50", "p_goal"):
     table[c] = table[c].map("{:.1%}".format)
 table.columns = [c[2:] if c.startswith("w_") else METRIC_LABELS[c][0] for c in table.columns]
-st.dataframe(table, hide_index=True, use_container_width=True)
+st.dataframe(table, hide_index=True, width="stretch")
+zero = [c[2:] for c in wcols if (show[c] == 0).all()]
+if zero:
+    st.caption(f"{', '.join(zero)} at 0 % in every efficient allocation: on this risk axis, swapping it for another "
+               "defensive asset never lowered risk enough to pay for its lower return. Cash, for example, earns less "
+               "than bonds, is taxed every year, and does not rise in a crash the way government bonds do. Its "
+               "real job is an emergency buffer, which the model does not value.")
+with st.expander("All simulated allocations"):
+    full = df[wcols + ["real_wealth_p50", "real_wealth_p5", risk, "pareto"]].sort_values(risk)
+    st.dataframe(full, hide_index=True, width="stretch")
 
 pick = st.selectbox("Use one of these as the target allocation", range(len(show)),
                     format_func=lambda i: " · ".join(f"{c[2:]} {show.iloc[i][c]:.0%}" for c in wcols))
