@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcengine"
+version = "0.1.0"
+description = "Monte Carlo engine for long-term, low-risk wealth building (EUR, German taxes, monthly savings plans)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pandas>=2.1",
+    "pydantic>=2.5",
+    "plotly>=5.18",
+    "streamlit>=1.40",
+]
+
+[project.optional-dependencies]
+data = ["openpyxl>=3.1"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[tool.setuptools.packages.find]
+include = ["mcengine*"]
+
+[tool.setuptools.package-data]
+mcengine = ["data/*.csv"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "NPY"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
