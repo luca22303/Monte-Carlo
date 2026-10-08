@@ -101,7 +101,7 @@ def _corr(pairs: dict[tuple[str, str], float]) -> list[list[float]]:
 def default_regimes() -> list[RegimeSpec]:
     calm = RegimeSpec(
         name="Calm / expansion",
-        vol={"equity": 0.11, "gold": 0.13, "nominal_yield": 0.005, "real_yield": 0.005,
+        vol={"equity": 0.13, "gold": 0.13, "nominal_yield": 0.005, "real_yield": 0.005,
              "short_rate": 0.004, "inflation": 0.006},
         drift={"equity": 0.0, "gold": 0.0, "nominal_yield": 0.0, "real_yield": 0.0,
                "short_rate": 0.0, "inflation": 0.0},
