@@ -36,3 +36,6 @@ select = ["E", "F", "W", "I", "B", "UP", "NPY"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/**" = ["E501"]  # long UI strings and widget calls read better unwrapped
