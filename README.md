@@ -16,14 +16,35 @@ It answers practical questions:
 
 ## Quick start
 
+Needs Python 3.11 or newer (`python3 --version`). On a Mac, get it from
+[python.org](https://www.python.org/downloads/) or with `brew install python@3.12`.
+
 ```bash
-pip install -e ".[dev]"
-streamlit run app/streamlit_app.py      # dashboard
-pytest                                   # 55 tests
-python -m mcengine.data.build_dataset    # optional: refresh the historical data panel
+git clone https://github.com/luca22303/Monte-Carlo.git
+cd Monte-Carlo
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+streamlit run app/streamlit_app.py
 ```
 
-Python ≥ 3.11. The historical panel (1973–2025) ships with the package, so no network access is needed.
+The dashboard opens at http://localhost:8501. Next time, only run `cd Monte-Carlo`,
+`source .venv/bin/activate` and `streamlit run app/streamlit_app.py`.
+
+The historical panel (1973–2025) is bundled, so no network access is needed after installing.
+
+Development:
+
+```bash
+pip install -e ".[dev]"
+pytest
+python -m mcengine.data.build_dataset
+```
+
+`pytest` runs 55 tests. The last command refreshes the historical data panel.
+
+**Hosting on Streamlit Community Cloud:** at share.streamlit.io choose this repository, the
+branch and main file `app/streamlit_app.py`. Dependencies come from `requirements.txt`.
 
 ## What it does
 

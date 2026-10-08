@@ -1,0 +1,8 @@
+# Runtime dependencies for the Streamlit dashboard (also used by Streamlit Community Cloud).
+# The app adds the repo root to sys.path, so the mcengine package needs no separate install.
+numpy>=1.26
+scipy>=1.11
+pandas>=2.1
+pydantic>=2.5
+plotly>=5.18
+streamlit>=1.40
