@@ -165,7 +165,7 @@ class MarketModel(BaseModel):
     """
 
     equity_return: float = Field(0.060, description="Geometric nominal EUR return p.a., gross of TER")
-    gold_return: float = Field(0.035, description="Geometric nominal EUR return p.a.")
+    gold_return: float = Field(0.030, description="Geometric nominal EUR return p.a. (~1% real)")
 
     nominal_yield_start: float = 0.030
     nominal_yield_mean: float = 0.029
