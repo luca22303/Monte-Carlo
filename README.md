@@ -56,7 +56,7 @@ branch and main file `app/streamlit_app.py`. Dependencies come from `requirement
 | **Allocation explorer** | Grid over the defensive sleeve at 50/55/60 % equity, full after-tax simulation per point, Pareto frontier, one-click apply. |
 | **ETFs & savings plan** | Checklist for products (cost, size, accumulating, domicile, gold delivery claim, savings-plan availability) with a verified example shortlist, the exact monthly savings-plan amount per ETF, and what the cost differences mean in € over your plan. |
 | **Goal planner** | Required monthly savings for a goal at chosen confidence levels; P(goal) vs. savings rate. |
-| **Annual review** | Enter today's holdings and cost basis. Get drift, band status, how to split the next savings, months to target without selling, trades plus estimated tax, and an updated outlook. |
+| **Annual review** | Import your broker's depot CSV (German or English exports; template for brokers without export) or enter today's holdings and cost basis. Get drift, band status, how to split the next savings, months to target without selling, trades plus estimated tax, and an updated outlook. |
 | **Assumptions & history** | Regime model, model vs. 1973–2025 history (returns, volatilities, correlations), your exact plan backtested on every historical window. |
 
 ## Engine in one paragraph
