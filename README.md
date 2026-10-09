@@ -28,7 +28,8 @@ pip install -r requirements.txt
 streamlit run app/streamlit_app.py
 ```
 
-The dashboard opens at http://localhost:8501. Next time, only run `cd Monte-Carlo`,
+The dashboard opens at http://localhost:8501. On a Mac you can afterwards simply **double-click
+`start_dashboard.command`** in Finder: it updates the code, installs new libraries and starts the dashboard. Next time, only run `cd Monte-Carlo`,
 `source .venv/bin/activate` and `streamlit run app/streamlit_app.py`.
 
 The historical panel (1973–2025) is bundled, so no network access is needed after installing.
