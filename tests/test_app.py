@@ -52,3 +52,22 @@ def test_etf_page_cost_simulation():
     btn.click().run()
     assert not at.exception, at.exception
     assert "etf_costs_result" in at.session_state
+
+
+def test_pages_follow_setup():
+    cfg = SimConfig.model_validate_json(SMALL)
+    eq = next(a.key for a in cfg.assets if a.kind == "equity")
+    w = {k: v * 0.3 / (1 - cfg.weights[eq]) for k, v in cfg.weights.items() if k != eq} | {eq: 0.7}
+    custom = cfg.model_copy(update={"weights": w}).model_dump_json()
+
+    at = AppTest.from_file(str(APP / "views" / "explorer.py"), default_timeout=120)
+    at.session_state["cfg_json"] = custom
+    at.run()
+    assert not at.exception, at.exception
+    assert 0.7 in at.multiselect[0].value, "explorer equity levels should centre on the setup's equity share"
+
+    at = AppTest.from_file(str(APP / "views" / "strategies.py"), default_timeout=240)
+    at.session_state["cfg_json"] = SMALL
+    at.run()
+    assert not at.exception, at.exception
+    assert at.selectbox[0].value.endswith("(your setup)"), "baseline should be the setup's own policy"

@@ -2,15 +2,17 @@ import json
 
 import pandas as pd
 import streamlit as st
-from common import get_cfg, set_cfg
+from common import apply_cfg, get_cfg, set_cfg, show_flash
 
 from mcengine.config import CostSpec, SavingsPlan, SimConfig, StrategySpec, TaxDE
 from mcengine.review import latest_market_state
 
 cfg = get_cfg()
 st.title("Setup")
-st.caption("Everything below is saved for this browser session and used by every page. "
-           "Amounts are in today's euros.")
+st.caption("Everything below is saved for this browser session. **Apply** passes it to every page: "
+           "Simulation, Strategies, Allocation explorer, ETFs, Goal planner and Annual review all start from "
+           "these settings. Amounts are in today's euros.")
+show_flash()
 
 with st.form("setup"):
     st.subheader("Savings plan")
@@ -114,7 +116,7 @@ with st.form("setup"):
         except FileNotFoundError:
             pass
 
-    submitted = st.form_submit_button("Save settings", type="primary")
+    submitted = st.form_submit_button("Apply to all pages", type="primary")
 
 if submitted:
     try:
@@ -140,11 +142,10 @@ if submitted:
             generator=gen, bootstrap_block_months=block, bootstrap_mean_adjust=mean_adj,
             n_paths=n_paths, seed=seed, goal_real=goal,
         )
-        set_cfg(new)
-        cfg = new
-        st.success("Saved. Open **Simulation** to see the results.")
     except Exception as e:  # validation errors are shown to the user
         st.error(f"Invalid settings: {e}")
+    else:
+        apply_cfg(new, "Applied. Every page now uses these settings; open **Simulation** to see the results.")
 
 st.subheader("Current target allocation")
 st.dataframe(pd.DataFrame({"Asset": [a.name for a in cfg.assets],

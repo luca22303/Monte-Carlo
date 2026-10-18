@@ -1,7 +1,7 @@
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from common import _layout, cat, eur, get_cfg, ink, scenarios, set_cfg
+from common import _layout, apply_cfg, cat, eur, get_cfg, ink, scenarios, show_flash
 
 from mcengine.compare import run_variants
 from mcengine.etfs import (
@@ -185,7 +185,7 @@ if table is not None:
     }), width="stretch")
     st.caption("Same market scenarios for all three, so the differences are caused only by costs.")
 
+show_flash()
 if st.button("Use my selection's costs in all simulations"):
-    set_cfg(with_costs(cfg, mine, gold_tax))
-    st.success("Setup updated with your products' costs" + (" and gold taxation" if gold_tax is not None else "")
-               + ". All pages now use them.")
+    apply_cfg(with_costs(cfg, mine, gold_tax), "Setup updated with your products' costs"
+              + (" and gold taxation" if gold_tax is not None else "") + ". All pages now use them.")

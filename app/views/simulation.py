@@ -1,18 +1,19 @@
 import numpy as np
 import streamlit as st
-from common import eur, fan_chart, get_cfg, histogram, kpi_row, metrics_table, run, scenarios
+from common import eur, fan_chart, get_cfg, histogram, kpi_row, metrics_table, run, scenarios, setup_summary
 
 from mcengine.metrics import max_drawdown, real_contributions
 
 cfg = get_cfg()
 st.title("Simulation")
-st.caption(f"{cfg.plan.horizon_years} years · €{cfg.plan.monthly:,.0f}/month ({cfg.plan.growth}) · "
-           f"{cfg.equity_share():.0%} equity · {cfg.strategy.label()} · "
-           f"{'German taxes' if cfg.tax.enabled else 'pre-tax'} · {cfg.n_paths:,} paths ({cfg.generator})")
+st.caption(setup_summary(cfg))
 
 res, s = run(cfg)
 kpi_row(s, cfg.goal_real)
-st.plotly_chart(fan_chart(res, cfg.goal_real), width="stretch")
+n_lines = st.select_slider("Paths drawn", [50, 100, 250, 500, 1000], 250,
+                           help="How many of the simulated futures are drawn as individual lines. "
+                                "Median and percentiles always use all paths.")
+st.plotly_chart(fan_chart(res, cfg.goal_real, n_lines=n_lines), width="stretch")
 
 c = st.columns(2)
 paid = float(np.median(real_contributions(res).sum(axis=1)))

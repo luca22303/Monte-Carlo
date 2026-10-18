@@ -10,13 +10,14 @@ from mcengine.portfolio.simulator import simulate
 cfg = get_cfg()
 st.title("Goal planner")
 st.caption("How much do you need to save each month to reach a goal with a chosen confidence? Runs on the "
-           "first 2,000 scenarios of your current setup.")
+           "scenarios of your Setup (allocation, strategy, costs, taxes, horizon), cut to the number of paths "
+           "chosen below.")
 
 c = st.columns(3)
 goal = c[0].number_input("Goal (today's €)", 10_000.0, 50_000_000.0, max(cfg.goal_real, 10_000.0), 10_000.0)
 confs = c[1].multiselect("Confidence levels", [0.5, 0.6, 0.7, 0.8, 0.9, 0.95], [0.5, 0.8, 0.9],
                          format_func="{:.0%}".format)
-paths = c[2].select_slider("Paths", [1000, 2000, 5000], 2000)
+paths = c[2].select_slider("Paths", [1000, 2000, 5000], 2000 if cfg.n_paths >= 2000 else 1000)
 
 
 @st.cache_resource(max_entries=8, show_spinner="Solving…")

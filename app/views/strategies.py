@@ -2,12 +2,15 @@ import pandas as pd
 import streamlit as st
 from common import box_by_variant, eur, get_cfg, metrics_table, scenarios
 
-from mcengine.compare import DEFAULT_STRATEGIES, compare_strategies, paired_difference
+from mcengine.compare import DEFAULT_STRATEGIES, paired_difference, run_variants
+
+MINE = " (your setup)"
 
 cfg = get_cfg()
 st.title("Rebalancing strategies")
 st.caption("All strategies run on the *same* market scenarios with the same savings outlay, so the "
-           "differences come from the rebalancing rule alone (paired comparison).")
+           "differences come from the rebalancing rule alone (paired comparison). Savings, allocation, costs "
+           f"and taxes come from your Setup; your own policy is marked *{MINE.strip()}*.")
 
 
 @st.cache_resource(max_entries=4, show_spinner="Running all strategies on shared scenarios…")
@@ -15,7 +18,11 @@ def _compare(cfg_json: str):
     from mcengine.config import SimConfig
 
     c = SimConfig.model_validate_json(cfg_json)
-    return compare_strategies(c, DEFAULT_STRATEGIES, sc=scenarios(c))
+    mine = c.strategy.label()
+    strategies = DEFAULT_STRATEGIES + ([c.strategy] if mine not in {s.label() for s in DEFAULT_STRATEGIES} else [])
+    variants = {s.label() + (MINE if s.label() == mine else ""): c.model_copy(update={"strategy": s})
+                for s in strategies}
+    return run_variants(variants, scenarios(c))
 
 
 df, results = _compare(cfg.model_dump_json())
@@ -27,7 +34,7 @@ st.dataframe(metrics_table({k: v.to_dict() for k, v in df.iterrows()}, keys), wi
 
 st.subheader("Paired difference vs. a baseline")
 labels = list(results)
-base = st.selectbox("Baseline", labels, index=1)
+base = st.selectbox("Baseline", labels, index=next(i for i, lab in enumerate(labels) if lab.endswith(MINE)))
 rows = []
 for lab in labels:
     if lab == base:

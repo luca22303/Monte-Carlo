@@ -28,6 +28,10 @@ SEQ = {"100": "#cde2fb", "250": "#86b6ef", "450": "#2a78d6", "600": "#184f95"}
 SEQ_DARK = {"100": "#184f95", "250": "#256abf", "450": "#5598e7", "600": "#b7d3f6"}
 DIVERGING = [[0.0, "#2a78d6"], [0.5, "#f0efec"], [1.0, "#e34948"]]
 DIVERGING_DARK = [[0.0, "#3987e5"], [0.5, "#383835"], [1.0, "#e66767"]]
+# Blue shades for individual simulated paths, light → dark. Dark mode drops the darkest steps,
+# which would vanish against the background.
+PATH_BLUES = ["#9ec5f4", "#78abec", "#5592e2", "#2a78d6", "#2266bc", "#1b56a1", "#154585", "#0f3569"]
+PATH_BLUES_DARK = ["#d4e5fa", "#b2d0f6", "#8fbaf0", "#6ba3ea", "#4b8de0", "#3378cf", "#2865b4", "#20549a"]
 
 
 def is_dark() -> bool:
@@ -54,6 +58,14 @@ def diverging():
     return DIVERGING_DARK if is_dark() else DIVERGING
 
 
+def path_blues() -> list[str]:
+    return PATH_BLUES_DARK if is_dark() else PATH_BLUES
+
+
+def background() -> str:
+    return "#0e1117" if is_dark() else "#ffffff"
+
+
 # ----------------------------------------------------------------------------- state
 def get_cfg() -> SimConfig:
     if "cfg_json" not in st.session_state:
@@ -63,6 +75,26 @@ def get_cfg() -> SimConfig:
 
 def set_cfg(cfg: SimConfig) -> None:
     st.session_state["cfg_json"] = cfg.model_dump_json()
+
+
+def apply_cfg(cfg: SimConfig, message: str) -> None:
+    """Save ``cfg`` for every page and rerun, so the sidebar and all page defaults pick it up."""
+    set_cfg(cfg)
+    st.session_state["_flash"] = message
+    st.rerun()
+
+
+def show_flash() -> None:
+    """Show the confirmation left by :func:`apply_cfg` before its rerun."""
+    if msg := st.session_state.pop("_flash", None):
+        st.success(msg)
+
+
+def setup_summary(cfg: SimConfig) -> str:
+    """One line with the settings every page runs on."""
+    return (f"{cfg.plan.horizon_years} years · €{cfg.plan.monthly:,.0f}/month ({cfg.plan.growth}) · "
+            f"{cfg.equity_share():.0%} equity · {cfg.strategy.label()} · "
+            f"{'German taxes' if cfg.tax.enabled else 'pre-tax'} · {cfg.n_paths:,} paths ({cfg.generator})")
 
 
 def scenario_key(cfg: SimConfig) -> str:
@@ -132,33 +164,58 @@ def _layout(fig: go.Figure, title: str, y_title: str = "", x_title: str = "", he
     return fig
 
 
-def fan_chart(res: SimResult, goal: float = 0.0, title: str = "Wealth in today's €") -> go.Figure:
+def fan_chart(res: SimResult, goal: float = 0.0, title: str = "Wealth in today's €",
+              n_lines: int = 250) -> go.Figure:
+    """Individual simulated paths in shades of blue, with median, P5/P95 and savings on top."""
+    w = res.real_wealth()
     f = fan(res, real=True)
     years = (np.arange(res.months) + 1) / 12
     contrib = np.median(np.cumsum(real_contributions(res), axis=1), axis=0)
-    s = seq()
+    blues = path_blues()
     sec, muted = ink()
+    halo = background()
+    accent = "#e8f1fd" if is_dark() else "#0a2a52"
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=years, y=f[95], line={"width": 0}, hoverinfo="skip", showlegend=False))
-    fig.add_trace(go.Scatter(x=years, y=f[5], fill="tonexty", fillcolor=s["100"], line={"width": 0},
-                             name="5–95 % of futures", hoverinfo="skip"))
-    fig.add_trace(go.Scatter(x=years, y=f[75], line={"width": 0}, hoverinfo="skip", showlegend=False))
-    fig.add_trace(go.Scatter(x=years, y=f[25], fill="tonexty", fillcolor=s["250"], line={"width": 0},
-                             name="25–75 %", hoverinfo="skip"))
-    fig.add_trace(go.Scatter(x=years, y=f[50], line={"color": s["600"], "width": 2}, name="Median",
-                             customdata=np.stack([f[5], f[25], f[75], f[95]], axis=1),
-                             hovertemplate="Year %{x:.1f}<br>Median €%{y:,.0f}<br>P5 €%{customdata[0]:,.0f}"
-                                           " · P25 €%{customdata[1]:,.0f}<br>P75 €%{customdata[2]:,.0f}"
-                                           " · P95 €%{customdata[3]:,.0f}<extra></extra>"))
-    fig.add_trace(go.Scatter(x=years, y=contrib, line={"color": sec, "width": 2, "dash": "dash"},
-                             name="Savings paid in",
-                             hovertemplate="Savings paid in €%{y:,.0f}<extra></extra>"))
+
+    # A fixed random sample of paths; shades are dealt round-robin so neighbouring lines differ.
+    rng = np.random.default_rng(0)
+    idx = rng.choice(res.n_paths, size=min(n_lines, res.n_paths), replace=False)
+    x_one = np.append(years, np.nan)
+    for i, color in enumerate(blues):
+        sel = idx[i::len(blues)]
+        if sel.size == 0:
+            continue
+        y = np.concatenate([w[sel], np.full((sel.size, 1), np.nan)], axis=1).ravel()
+        fig.add_trace(go.Scatter(x=np.tile(x_one, sel.size), y=y, mode="lines",
+                                 line={"color": color, "width": 1}, opacity=0.75, connectgaps=False,
+                                 hoverinfo="skip", legendgroup="paths", showlegend=i == len(blues) // 2,
+                                 name=f"Individual futures ({idx.size:,} of {res.n_paths:,})"))
+
+    def overlay(y, color, width, dash, name, **kw):
+        # Background-coloured halo underneath keeps the line readable on top of the paths.
+        fig.add_trace(go.Scatter(x=years, y=y, line={"color": halo, "width": width + 3}, hoverinfo="skip",
+                                 showlegend=False, legendgroup=name))
+        fig.add_trace(go.Scatter(x=years, y=y, line={"color": color, "width": width, "dash": dash}, name=name,
+                                 legendgroup=name, **kw))
+
+    overlay(f[5], accent, 1.5, "dash", "5 % / 95 % of futures", hoverinfo="skip")
+    overlay(f[95], accent, 1.5, "dash", "5 % / 95 % of futures", hoverinfo="skip", showlegend=False)
+    overlay(contrib, sec, 2, "dot", "Savings paid in", hovertemplate="Savings paid in €%{y:,.0f}<extra></extra>")
+    overlay(f[50], accent, 3, "solid", "Median",
+            customdata=np.stack([f[5], f[25], f[75], f[95]], axis=1),
+            hovertemplate="Year %{x:.1f}<br>Median €%{y:,.0f}<br>P5 €%{customdata[0]:,.0f}"
+                          " · P25 €%{customdata[1]:,.0f}<br>P75 €%{customdata[2]:,.0f}"
+                          " · P95 €%{customdata[3]:,.0f}<extra></extra>")
     if goal > 0:
         fig.add_hline(y=goal, line={"color": muted, "width": 1, "dash": "dot"},
                       annotation_text=f"Goal {eur(goal)}", annotation_position="top left",
                       annotation_font_color=sec)
+    # Frame the bulk of the paths; the few most extreme ones may leave the chart at the top.
+    top = max(float(np.percentile(w, 99, axis=0).max()), goal) * 1.05
     fig.update_layout(hovermode="x")
-    return _layout(fig, title, "€ (today's purchasing power)", "Years from now")
+    fig = _layout(fig, title, "€ (today's purchasing power)", "Years from now", height=480)
+    fig.update_yaxes(range=[min(0.0, float(w.min())), top])
+    return fig
 
 
 def histogram(values: np.ndarray, title: str, x_title: str, markers: dict[str, float] | None = None,

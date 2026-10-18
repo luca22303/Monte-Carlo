@@ -100,9 +100,13 @@ with st.form("review"):
     sim = c[2].checkbox("Simulate forward from today", True)
     submitted = st.form_submit_button("Run review", type="primary")
 
+# A review computed under different Setup settings no longer applies.
+if st.session_state.get("review_cfg") != cfg.model_dump_json():
+    st.session_state.pop("review_result", None)
 if not submitted and "review_result" not in st.session_state:
     st.stop()
 if submitted:
+    st.session_state["review_cfg"] = cfg.model_dump_json()
     st.session_state["review_holdings"] = df.to_dict(orient="list")
     values = dict(zip(df["key"], df["Market value €"], strict=True))
     basis = dict(zip(df["key"], df["Cost basis €"], strict=True))
