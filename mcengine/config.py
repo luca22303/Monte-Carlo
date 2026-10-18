@@ -154,7 +154,15 @@ def default_regimes() -> list[RegimeSpec]:
         }),
         df=6.0,
     )
-    return [calm, crisis, inflation]
+    recovery = RegimeSpec(
+        name="Recovery (post-crisis rebound)",
+        vol={**calm.vol, "equity": 0.18, "gold": 0.15},
+        drift={"equity": 0.40, "gold": -0.03, "nominal_yield": 0.005, "real_yield": 0.0,
+               "short_rate": 0.010, "inflation": 0.005},
+        corr=calm.corr,
+        df=6.0,
+    )
+    return [calm, crisis, inflation, recovery]
 
 
 class MarketModel(BaseModel):
@@ -185,12 +193,23 @@ class MarketModel(BaseModel):
     inflation_mean: float = 0.020
     inflation_kappa: float = Field(0.50, ge=0)
 
+    # Parameter uncertainty: nobody knows the true long-run averages. Each path draws its own
+    # long-run equity/gold return and inflation level (normal, clipped at +-3 sd). Nominal yields,
+    # the short rate and nominal equity/gold returns move with the drawn inflation level.
+    equity_return_uncertainty: float = Field(0.015, ge=0, le=0.05,
+                                             description="Std. dev. of the long-run equity return p.a.")
+    gold_return_uncertainty: float = Field(0.015, ge=0, le=0.05)
+    inflation_mean_uncertainty: float = Field(0.005, ge=0, le=0.03)
+
     regimes: list[RegimeSpec] = Field(default_factory=default_regimes)
     transition: list[list[float]] = Field(
         default_factory=lambda: [
-            [0.980, 0.012, 0.008],
-            [0.150, 0.850, 0.000],
-            [0.070, 0.000, 0.930],
+            # calm, crisis, inflation shock, recovery. Crises are mostly followed by a rebound
+            # (2009, 2020), which keeps the model from rewarding selling after a crash.
+            [0.980, 0.012, 0.008, 0.000],
+            [0.030, 0.850, 0.000, 0.120],
+            [0.070, 0.000, 0.930, 0.000],
+            [0.120, 0.000, 0.000, 0.880],
         ],
         description="Monthly regime transition matrix (rows sum to 1)",
     )
@@ -205,6 +224,15 @@ class MarketModel(BaseModel):
         if (p < 0).any() or not np.allclose(p.sum(axis=1), 1.0, atol=1e-6):
             raise ValueError("transition rows must be probabilities summing to 1")
         return self
+
+    def parameter_shifts(self, n_paths: int, seed: int) -> dict[str, np.ndarray]:
+        """Per-path deviations of the long-run assumptions (annual). Separate random stream, so
+        switching uncertainty on/off leaves all other market shocks unchanged."""
+        rng = np.random.default_rng([seed, 7919])
+        z = np.clip(rng.standard_normal((n_paths, 3)), -3.0, 3.0)
+        return {"equity": z[:, 0] * self.equity_return_uncertainty,
+                "gold": z[:, 1] * self.gold_return_uncertainty,
+                "inflation": z[:, 2] * self.inflation_mean_uncertainty}
 
     def stationary_distribution(self) -> np.ndarray:
         p = np.asarray(self.transition, dtype=float)
@@ -277,6 +305,38 @@ class TaxDE(BaseModel):
         return est * (1.0 + 0.055 + k)
 
 
+class GlidePath(BaseModel):
+    """Lower the equity share linearly over the last ``years`` of the plan."""
+
+    enabled: bool = False
+    years: int = Field(10, ge=1, le=40)
+    end_equity: float = Field(0.40, ge=0, le=1)
+
+
+class Reevaluation(BaseModel):
+    """Re-estimate P(goal) every few months and switch between the base and a defensive mix."""
+
+    enabled: bool = False
+    every_months: int = Field(12, ge=1, le=36)
+    high: float = Field(0.85, ge=0, le=1, description="Switch to defensive when P(goal) >= high")
+    low: float = Field(0.70, ge=0, le=1, description="Switch back to base when P(goal) < low")
+    defensive_equity: float = Field(0.40, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _check(self) -> Reevaluation:
+        if self.low >= self.high:
+            raise ValueError("'low' must be below 'high'")
+        return self
+
+
+class Behavior(BaseModel):
+    """What-if: sell all equity after a large drawdown and buy back later."""
+
+    panic: bool = False
+    drawdown: float = Field(0.30, gt=0, lt=1)
+    months_out: int = Field(12, ge=1, le=120)
+
+
 Generator = Literal["parametric", "bootstrap"]
 
 
@@ -290,6 +350,9 @@ class SimConfig(BaseModel):
     market: MarketModel = Field(default_factory=MarketModel)
     costs: CostSpec = Field(default_factory=CostSpec)
     tax: TaxDE = Field(default_factory=TaxDE)
+    glide: GlidePath = Field(default_factory=GlidePath)
+    reevaluation: Reevaluation = Field(default_factory=Reevaluation)
+    behavior: Behavior = Field(default_factory=Behavior)
 
     generator: Generator = "parametric"
     bootstrap_block_months: float = Field(24.0, ge=1, description="Mean block length (stationary bootstrap)")

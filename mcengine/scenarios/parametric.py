@@ -59,7 +59,8 @@ def regime_parameters(mm: MarketModel) -> dict[str, np.ndarray]:
     }
 
 
-def simulate_factors(mm: MarketModel, n_paths: int, n_months: int, rng: np.random.Generator) -> dict:
+def simulate_factors(mm: MarketModel, n_paths: int, n_months: int, rng: np.random.Generator,
+                     shifts: dict[str, np.ndarray] | None = None) -> dict:
     """Simulate regimes, rate levels and equity/gold log returns.
 
     Returns arrays of shape [P, T] (rates are levels at the *end* of each month; the
@@ -78,6 +79,16 @@ def simulate_factors(mm: MarketModel, n_paths: int, n_months: int, rng: np.rando
     mean = np.array([mm.nominal_yield_mean, mm.real_yield_mean, mm.short_rate_mean, mm.inflation_mean])
     kappa_m = np.array([mm.nominal_yield_kappa, mm.real_yield_kappa, mm.short_rate_kappa,
                         mm.inflation_kappa]) / 12.0
+    mean = np.tile(mean, (p, 1))  # [P, 4]: long-run levels, possibly different per path
+    path_drift = np.zeros((p, len(FACTORS)))  # extra annual log drift per path
+    if shifts is not None:
+        di = shifts["inflation"]
+        mean[:, 0] += di  # nominal yield (Fisher: follows the inflation level)
+        mean[:, 2] += di  # short rate
+        mean[:, 3] += di  # inflation
+        path_drift[:, EQ] = shifts["equity"] + di
+        path_drift[:, GOLD] = shifts["gold"] + di
+    path_drift /= 12.0
     rates = np.tile(start, (p, 1))  # [P, 4]: y, r, s, i
 
     regimes = np.empty((p, t), dtype=np.int8)
@@ -104,7 +115,7 @@ def simulate_factors(mm: MarketModel, n_paths: int, n_months: int, rng: np.rando
                 xj *= np.sqrt((nu - 2.0) / nu) / np.sqrt(w)[:, None]
             x[mask] = xj
 
-        drift = prm["drift_m"][reg]  # [P, F]
+        drift = prm["drift_m"][reg] + path_drift  # [P, F]
         vol = prm["vol_m"][reg]
         shock = drift + vol * x
         eq_lr[:, m] = shock[:, EQ]
@@ -125,7 +136,7 @@ def generate_parametric(cfg: SimConfig) -> ScenarioSet:
     mm = cfg.market
     rng = np.random.default_rng(cfg.seed)
     p, t = cfg.n_paths, cfg.months
-    f = simulate_factors(mm, p, t, rng)
+    f = simulate_factors(mm, p, t, rng, mm.parameter_shifts(p, cfg.seed))
 
     rates_end = f["rates"]  # [P, T, 4]
     rates_beg = np.concatenate([np.broadcast_to(f["rates_start"], (p, 1, 4)), rates_end[:, :-1]], axis=1)

@@ -28,16 +28,30 @@ inflation, and the long yield (used for the Basiszins).
 Six risk factors: equity log-return, gold log-return, nominal yield, real yield, short rate
 and inflation.
 
-* **Regimes.** A Markov chain over *calm* (≈ 84 % of the time, average spell ≈ 4 years),
-  *deflationary crisis* (≈ 7 %, ≈ 7 months; equities fall, yields fall, bonds hedge) and
-  *inflation shock* (≈ 10 %, ≈ 14 months; inflation and yields rise, so stocks **and** bonds
-  fall, as in the 1970s and 2022).
+* **Regimes.** A Markov chain over four regimes:
+  * *calm* (≈ 79 % of the time, average spell ≈ 4 years)
+  * *deflationary crisis* (≈ 6 %, ≈ 7 months; equities fall, yields fall, bonds hedge)
+  * *inflation shock* (≈ 9 %, ≈ 14 months; inflation and yields rise, so stocks **and** bonds
+    fall, as in the 1970s and 2022)
+  * *recovery* (≈ 6 %, ≈ 8 months), which follows most crises
+* **Why a recovery regime.** Without it the model had momentum after crashes: after the
+  60/40 portfolio fell 30 %, equities earned only +2 % over the next 12 months, against
+  +6 % in the 1973–2025 data. That wrongly rewarded selling after a crash. With the recovery
+  regime the model gives +6.7 %, and panic selling costs money, as it does historically.
 * **Shocks** are multivariate Student-t with a shared mixing variable, which gives tail
-  dependence. Volatilities, correlations and tail thickness (df 8 / 5 / 6) depend on the regime.
+  dependence. Volatilities, correlations and tail thickness (df 8 / 5 / 6 / 6) depend on the
+  regime.
 * **Drift re-centring.** Regime drifts are re-centred so the stationary average equals the
   long-run assumption. Regimes shape the distribution but do not change the expected return.
 * **Rates** follow mean-reverting AR(1) processes from today's starting values toward
   long-run means.
+* **Parameter uncertainty.** The long-run averages are themselves unknown, so each path draws
+  its own long-run equity return (default ± 1.5 % p.a., 1 std. dev.), gold return (± 1.5 %)
+  and inflation level (± 0.5 %), clipped at ± 3 std. dev. Nominal yields, the short rate and
+  nominal equity/gold returns move with the drawn inflation level (real returns unchanged).
+  Over 30 years this widens the outcome range noticeably, which is the honest answer to "we
+  don't know if equities will earn 4 % or 8 %". The draws use a separate random stream, so
+  switching uncertainty off changes nothing else. The bootstrap applies the same per-path shifts.
 * **Asset mapping:**
   * equity and gold: `exp(log-return) − 1`
   * nominal bonds: `y/12 − D·Δy + ½·C·Δy²`
@@ -89,11 +103,12 @@ This is a sanity check, not a distribution.
 
 | | History 1973–2025 | Parametric model |
 |---|---|---|
-| Equity volatility (monthly, annualised) | 17.3 % | ≈ 15–16 % |
+| Equity volatility (monthly, annualised) | 17.3 % | ≈ 16–17 % |
+| Equity return in the 12 months after a 30 % portfolio fall | +6.1 % (bootstrap) | +6.7 % |
 | Govt bond volatility | 4.9 % | 4.3 % |
 | Gold volatility | 15.7 % | 14.1 % |
 | Govt bond max drawdown | 20 % (2022) | P50 13 %, P95 24 % over 30y |
-| 60/40 (monthly rebalanced) max drawdown | 35 % over 53y | P50 25 %, P95 ≈ 44 % over 30y |
+| 60/40 (monthly rebalanced) max drawdown | 35 % over 53y | P50 26 %, P95 ≈ 46 % over 30y |
 
 The model's tail drawdowns are somewhat harsher than 1973–2025 history. That is deliberate:
 53 years are one sample path, and 1929-type outcomes are not in it.
@@ -115,6 +130,34 @@ from exact per-trade FIFO.
 * **Cash-flow:** savings go to the underweight assets, closing gaps first. Never sells.
 * **Hybrid:** cash-flow steering plus a band rebalance with wide bands (10 % / 50 %) as an
   emergency brake.
+
+**Dynamic targets** (`portfolio/dynamic.py`, optional, combinable with any policy):
+* **Glide path.** Over the last *N* years the equity share falls linearly to an end level;
+  the defensive assets keep their proportions. The policy decides how fast the portfolio
+  follows: cash-flow steering moves it with new savings, band/hybrid also trade.
+* **Re-evaluation switch** (the "re-run the Monte Carlo every 6–12 months" idea from the
+  research notes). Every 6 or 12 months each path re-estimates P(real wealth at the horizon ≥
+  goal) for its current wealth, remaining savings and the base allocation. It uses a
+  closed-form lognormal approximation with moments taken from the scenario set itself; a
+  nested simulation for every path and review date would be far too slow.
+  * At P ≥ *high* (default 85 %) the path switches to a defensive mix (default 40 % equity)
+    and locks in progress.
+  * Below *low* (default 70 %) it switches back to the base mix. It never takes more risk
+    than the base plan, and the gap between the thresholds prevents flip-flopping.
+  * Switches are executed as trades, so they pay tax and costs.
+  * Result: a slightly higher goal probability, much less upside.
+* **Panic selling** (a what-if, not a strategy). After a portfolio drawdown of *x* % all
+  equity is sold into cash (taxed), new savings go to cash, and the investor buys back after
+  *m* months. Comparing it with staying invested on the same scenarios prices the behaviour.
+
+**Stress tests** (`stress.py`). The months of a historical crisis are written into every
+path at a chosen point of the plan: 1973–74, dot-com, 2008, Covid 2020, 2022 or the lost
+decade 2000–09 (all assets, inflation and yield, without mean adjustment).
+* Optionally the 24 months after the crisis are replayed too. Otherwise the simulated
+  continuation would not "know" about the crash, and the missing rebound would overstate the
+  damage of an early crisis.
+* "Right before the goal date" places the crash itself at the end of the plan, so there is
+  no time left to recover.
 
 ### German taxation (`portfolio/tax_de.py`)
 
@@ -162,9 +205,9 @@ in several places:
 |---|---|---|
 | Plan "success rate / solvency" (target 80–90 %), Guyton-Klinger guardrails, sequence-of-returns risk with withdrawals | Decumulation concepts. For a monthly saver, sequence risk runs the other way: late crashes hurt most, early crashes are buying opportunities. | Goal probability, real-loss probability, money-weighted real return and drawdown metrics |
 | Sobol quasi-Monte Carlo gives O(N⁻¹) convergence | Holds for smooth, low-dimensional integrands. Here there are 360 months × 6 factors, regime switches and path-dependent taxes, so the advantage largely disappears. | Seeded PRNG, 5–20k paths, reported standard errors, common random numbers for comparisons |
-| GARCH(1,1) for volatility clustering | Valid, but regime switching captures clustering *and* correlation breaks (2008 vs 2022) more transparently | 3-regime Markov switching with Student-t shocks |
+| GARCH(1,1) for volatility clustering | Valid, but regime switching captures clustering *and* correlation breaks (2008 vs 2022) more transparently | 4-regime Markov switching with Student-t shocks, including a post-crisis recovery |
 | Copulas, VAR macro scenario generators, CUDA | Overkill for one investor's 5-asset portfolio | Not used; 10k paths × 30y run in seconds in NumPy |
-| "Re-run the simulation and follow its recommendation" (dynamic re-simulation) | Risk of moving goalposts and pro-cyclical changes | Annual review updates state only; the policy is fixed in advance |
+| "Re-run the simulation and follow its recommendation" (dynamic re-simulation) | Risk of moving goalposts and pro-cyclical changes if the *assumptions* are re-estimated after each move | Annual review updates state only. The rule itself ("switch to defensive at P(goal) ≥ 85 %, back below 70 %") is available as a pre-committed, testable policy, so its cost (lost upside) and benefit (higher goal probability) are visible before you use it |
 | CPPI as a dynamic strategy | Path-dependent; risks being locked into cash after a crash; conflicts with a fixed 60/40 | Not included; cash-flow and band rebalancing instead |
 | Scenario A: "after a 30 % equity rally, de-risk because success probability rose" | Contradicts the stated wish for high return; it is a goal-locking decision, not a free lunch | Can be explored with the goal planner (lower equity once the goal is nearly certain) |
 | Missing entirely: taxes, costs, EUR inflation, FX, tax-aware rebalancing | For a German investor these are among the largest controllable levers | Full German tax module, TER and trading costs, CPI deflation, cash-flow rebalancing |

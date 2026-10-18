@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 from common import apply_cfg, get_cfg, set_cfg, show_flash
 
-from mcengine.config import CostSpec, SavingsPlan, SimConfig, StrategySpec, TaxDE
+from mcengine.config import CostSpec, GlidePath, Reevaluation, SavingsPlan, SimConfig, StrategySpec, TaxDE
 from mcengine.review import latest_market_state
 
 cfg = get_cfg()
@@ -57,6 +57,25 @@ with st.form("setup"):
     rel_band = c[3].number_input("Band: relative", 0.0, 2.0, cfg.strategy.rel_band, 0.05, format="%.2f",
                                  help="Band = max(absolute, relative × target weight).")
 
+    st.subheader("Dynamic risk management (optional)")
+    c = st.columns([1.3, 1, 1])
+    glide_on = c[0].checkbox("Glide path: lower equity before the goal date", cfg.glide.enabled,
+                             help="Over the last years of the plan the equity share falls linearly to the end level, "
+                                  "so a crash just before you need the money hurts less.")
+    glide_years = c[1].number_input("Glide over the last … years", 1, 40, cfg.glide.years)
+    glide_end = c[2].slider("Equity share at the end", 0.0, 0.8, float(cfg.glide.end_equity), 0.05)
+    c = st.columns([1.3, 1, 1, 1, 1])
+    reev_on = c[0].checkbox("Re-evaluation switch (re-run the outlook every 6–12 months)", cfg.reevaluation.enabled,
+                            help="Every 6 or 12 months the probability of reaching your goal is re-estimated for the "
+                                 "current portfolio. At or above the upper threshold you are 'on track' and switch to a "
+                                 "defensive mix to lock in progress; below the lower threshold you go back to your base "
+                                 "mix. It never takes more risk than your base plan. Needs a goal > 0.")
+    reev_every = c[1].selectbox("Every", [6, 12], index=0 if cfg.reevaluation.every_months == 6 else 1,
+                                format_func=lambda m: f"{m} months")
+    reev_high = c[2].slider("Switch to defensive at P(goal) ≥", 0.5, 0.99, float(cfg.reevaluation.high), 0.01)
+    reev_low = c[3].slider("Back to base at P(goal) <", 0.3, 0.95, float(cfg.reevaluation.low), 0.01)
+    reev_eq = c[4].slider("Defensive equity share", 0.0, 0.8, float(cfg.reevaluation.defensive_equity), 0.05)
+
     st.subheader("Taxes (Germany) & costs")
     c = st.columns(4)
     tax_on = c[0].checkbox("Model German taxes", cfg.tax.enabled)
@@ -98,6 +117,15 @@ with st.form("setup"):
                                    format="%.4f")
         gold_ret = c[1].number_input("Gold return (geometric)", -0.05, 0.15, mm.gold_return, 0.0025, format="%.4f")
         cash_floor = c[2].number_input("Cash rate floor", -0.02, 0.05, mm.cash_floor, 0.0025, format="%.4f")
+        st.markdown("Uncertainty about these assumptions (each simulated future draws its own long-run value)")
+        c = st.columns(3)
+        eq_unc = c[0].number_input("± equity return (std. dev.)", 0.0, 0.05, mm.equity_return_uncertainty, 0.0025,
+                                   format="%.4f", help="0.015 = the true long-run return is 6 % ± 1.5 % (1 std. dev.). "
+                                                       "Set all three to 0 for the old fixed-assumption behaviour.")
+        gold_unc = c[1].number_input("± gold return (std. dev.)", 0.0, 0.05, mm.gold_return_uncertainty, 0.0025,
+                                     format="%.4f")
+        infl_unc = c[2].number_input("± long-run inflation (std. dev.)", 0.0, 0.03, mm.inflation_mean_uncertainty,
+                                     0.001, format="%.4f", help="Yields and nominal returns move with it.")
         st.markdown("Start → long-run mean")
         c = st.columns(4)
         y0 = c[0].number_input("Nominal govt yield, start", -0.02, 0.15, mm.nominal_yield_start, 0.001, format="%.4f")
@@ -128,6 +156,7 @@ if submitted:
                   zip(cfg.assets, ter_df["TER % p.a."], strict=True)]
         market = cfg.market.model_copy(update=dict(
             equity_return=eq_ret, gold_return=gold_ret, cash_floor=cash_floor,
+            equity_return_uncertainty=eq_unc, gold_return_uncertainty=gold_unc, inflation_mean_uncertainty=infl_unc,
             nominal_yield_start=y0, nominal_yield_mean=ym, real_yield_start=r0, real_yield_mean=rm,
             short_rate_start=s0, short_rate_mean=sm, inflation_start=i0, inflation_mean=im))
         new = SimConfig(
@@ -136,6 +165,10 @@ if submitted:
             plan=SavingsPlan(monthly=monthly, start_capital=start_capital, horizon_years=horizon,
                              growth=growth, growth_rate=growth_rate),
             costs=CostSpec(trade_bps=trade_bps),
+            glide=GlidePath(enabled=glide_on, years=glide_years, end_equity=glide_end),
+            reevaluation=Reevaluation(enabled=reev_on, every_months=reev_every, high=reev_high, low=reev_low,
+                                      defensive_equity=reev_eq),
+            behavior=cfg.behavior,
             tax=TaxDE(enabled=tax_on, church_tax=church, allowance=2000.0 if joint else 1000.0,
                       basiszins=None if bz_mode == "simulated" else bz_val, personal_rate=personal,
                       gold_exemption_limit=cfg.tax.gold_exemption_limit),

@@ -55,3 +55,35 @@ def test_crisis_regime_has_fat_left_tail():
     eq = sc.returns[..., 0].astype(float).ravel()
     z = (eq - eq.mean()) / eq.std()
     assert (z < -3).mean() > 3 * 0.00135  # far more 3-sigma drops than a normal distribution
+
+
+def _no_uncertainty(cfg: SimConfig) -> SimConfig:
+    mm = cfg.market.model_copy(update={"equity_return_uncertainty": 0.0, "gold_return_uncertainty": 0.0,
+                                       "inflation_mean_uncertainty": 0.0})
+    return cfg.model_copy(update={"market": mm})
+
+
+def test_parameter_uncertainty_only_shifts_drift():
+    cfg = SimConfig(n_paths=300)
+    with_u, without = generate(cfg), generate(_no_uncertainty(cfg))
+    d = np.log1p(with_u.returns[..., 0].astype(float)) - np.log1p(without.returns[..., 0].astype(float))
+    # same shocks: the difference is a constant per-path drift, not noise
+    assert np.allclose(d, d[:, :1], atol=2e-5)
+    sh = cfg.market.parameter_shifts(300, cfg.seed)
+    np.testing.assert_allclose(d[:, 0] * 12, sh["equity"] + sh["inflation"], atol=3e-4)
+
+
+def test_parameter_uncertainty_widens_outcomes():
+    cfg = SimConfig(n_paths=3000)
+    path_mean = lambda sc: np.log1p(sc.returns[..., 0].astype(float)).mean(axis=1) * 12  # noqa: E731
+    spread_u = path_mean(generate(cfg)).std()
+    spread_0 = path_mean(generate(_no_uncertainty(cfg))).std()
+    expected = np.sqrt(spread_0**2 + 0.015**2 + 0.005**2)
+    assert spread_u > spread_0 and abs(spread_u - expected) < 0.004
+
+
+def test_bootstrap_parameter_uncertainty():
+    cfg = SimConfig(n_paths=500, generator="bootstrap")
+    a, b = generate(cfg), generate(_no_uncertainty(cfg))
+    d = np.log1p(a.returns[..., 0].astype(float)) - np.log1p(b.returns[..., 0].astype(float))
+    assert np.allclose(d, d[:, :1], atol=2e-5) and d[:, 0].std() * 12 > 0.01

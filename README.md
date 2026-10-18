@@ -42,7 +42,7 @@ pytest
 python -m mcengine.data.build_dataset
 ```
 
-`pytest` runs 55 tests. The last command refreshes the historical data panel.
+`pytest` runs the test suite. The last command refreshes the historical data panel.
 
 **Hosting on Streamlit Community Cloud:** at share.streamlit.io choose this repository, the
 branch and main file `app/streamlit_app.py`. Dependencies come from `requirements.txt`.
@@ -51,12 +51,13 @@ branch and main file `app/streamlit_app.py`. Dependencies come from `requirement
 
 | Page | Purpose |
 |---|---|
-| **Setup** | Savings plan, goal, allocation, rebalancing rule, taxes, costs, engine and market assumptions. Config import/export as JSON. |
-| **Simulation** | Fan chart of real wealth, terminal distribution, drawdown distribution, all metrics. |
-| **Strategies** | Buy & hold, calendar, band, cash-flow and hybrid rebalancing, run on *identical* scenarios, with paired differences and standard errors. |
+| **Setup** | Savings plan, goal, allocation, rebalancing rule, optional glide path and 6/12-month re-evaluation switch, taxes, costs, engine and market assumptions (including how uncertain they are). Config import/export as JSON. |
+| **Simulation** | Fan chart of real wealth, terminal distribution, drawdown distribution, equity share over time, all metrics. |
+| **Strategies** | Buy & hold, calendar, band, cash-flow and hybrid rebalancing, plus static vs. glide path vs. re-evaluation switch (6/12 months), all on *identical* scenarios, with paired differences and standard errors. |
 | **Allocation explorer** | Grid over the defensive sleeve at 50/55/60 % equity, full after-tax simulation per point, Pareto frontier, one-click apply. |
 | **ETFs & savings plan** | Checklist for products (cost, size, accumulating, domicile, gold delivery claim, savings-plan availability) with a verified example shortlist, the exact monthly savings-plan amount per ETF, and what the cost differences mean in € over your plan. |
 | **Goal planner** | Required monthly savings for a goal at chosen confidence levels; P(goal) vs. savings rate. |
+| **Stress & behaviour** | Replay a real crisis (1973–74, dot-com, 2008, Covid, 2022, lost decade) at the start, middle, right before the goal or in any year, optionally with its historical recovery; compare all crises at once. Plus the cost of panic selling after a fall. |
 | **Annual review** | Import your broker's depot CSV (German or English exports; template for brokers without export) or enter today's holdings and cost basis. Get drift, band status, how to split the next savings, months to target without selling, trades plus estimated tax, and an updated outlook. |
 | **Assumptions & history** | Regime model, model vs. 1973–2025 history (returns, volatilities, correlations), your exact plan backtested on every historical window. |
 
@@ -64,10 +65,12 @@ branch and main file `app/streamlit_app.py`. Dependencies come from `requirement
 
 Two independent return generators feed one simulator:
 
-1. **Parametric.** A 3-regime Markov-switching model (calm / deflationary crisis / inflation
-   shock) with fat-tailed multivariate Student-t shocks on six risk factors: equity, gold,
-   nominal yield, real yield, short rate and inflation. Bond and linker returns come from
-   the simulated yield paths, so today's starting yields anchor expected bond returns.
+1. **Parametric.** A 4-regime Markov-switching model (calm / deflationary crisis / inflation
+   shock / post-crisis recovery) with fat-tailed multivariate Student-t shocks on six risk
+   factors: equity, gold, nominal yield, real yield, short rate and inflation. Bond and linker
+   returns come from the simulated yield paths, so today's starting yields anchor expected
+   bond returns. Each path also draws its own long-run equity return, gold return and
+   inflation level, because nobody knows those numbers exactly (parameter uncertainty).
 2. **Bootstrap.** A stationary block bootstrap of monthly 1973–2025 EUR history (Fama/French,
    OECD, ECB), optionally mean-shifted to today's forward-looking assumptions.
 
@@ -77,7 +80,8 @@ The simulator runs the savings plan month by month:
   Sparerpauschbetrag, loss carry-forward, annual taxation of interest, and gold ETCs
   tax-free after 1 year
 - fund costs and trading costs
-- the chosen rebalancing policy
+- the chosen rebalancing policy, optionally with a glide path, the re-evaluation switch, or
+  (as a what-if) panic selling
 
 Results are reported in today's euros after final liquidation. See
 [`docs/methodology.md`](docs/methodology.md) for details, calibration and limitations.
@@ -89,10 +93,11 @@ linkers / 5 gold / 5 cash), hybrid rebalancing, taxes on, 5,000 paths.
 
 | | Forward-looking model | Your plan on actual 1973–2025 history |
 |---|---|---|
-| Median net wealth (today's €) | ≈ €520k | ≈ €895k |
-| Bad case (P5) | ≈ €315k | ≈ €700k |
-| Median real return p.a. (money-weighted, after tax) | ≈ 2.4 % | ≈ 5.5 % |
-| Max drawdown, P95 | ≈ 42 % | ≈ 37 % |
+| Median net wealth (today's €) | ≈ €515k | ≈ €895k |
+| Bad case (P5) | ≈ €295k | ≈ €700k |
+| Good case (P95) | ≈ €1.15m | ≈ €1.0m |
+| Median real return p.a. (money-weighted, after tax) | ≈ 2.3 % | ≈ 5.5 % |
+| Max drawdown, P95 | ≈ 45 % | ≈ 37 % |
 
 Savings paid in are €360k in today's money. The gap between the two columns is the most
 important number in the tool. The last 50 years were exceptional: bond yields started at
@@ -103,17 +108,25 @@ Robust findings (stable across seeds and both generators):
 
 * **Cash-flow steering beats calendar rebalancing after tax.** You buy the underweight asset
   with new savings instead of selling the overweight one. On identical scenarios it ends
-  ≈ €14k higher on average (standard error ≈ €0.6k). It is better on ~65 % of paths, has a
-  better bad case (P5) and a smaller P95 drawdown. The bootstrap generator confirms it
-  (+€22k). The gain comes from never realising gains early: tax is deferred and keeps
-  compounding, and winners run a little longer between corrections.
+  ≈ €32k higher on average (standard error ≈ €2k) and is better on ~64 % of paths. The
+  bootstrap generator confirms it (+€29k). The gain comes from never realising gains early:
+  tax is deferred and keeps compounding, and winners run a little longer between corrections.
 * **The engine can't promise "low risk, constant and high ROI" together.** A 60/40 portfolio
-  has negative calendar years ~28 % of the time and a ~1-in-20 chance of a 40 %+ fall at
+  has negative calendar years ~30 % of the time and a ~1-in-20 chance of a 45 %+ fall at
   some point in 30 years. What you control is the savings rate, costs, taxes, the
   rebalancing rule and staying invested.
 * **Optimisers amplify assumptions.** Without caps, the explorer piles into gold because it
   is uncorrelated, tax-free after a year and has an assumed return close to bonds. The
   explorer caps gold and cash at 15 % by default.
+* **Timing of a crash matters more than its size.** A 2008-style crash in the first years
+  barely changes the outcome; the same crash right before the goal date costs ≈ €70k and
+  drops P(goal) from ~52 % to ~37 %. That is the case for a glide path.
+* **Dynamic de-risking trades upside for safety.** The re-evaluation switch raises the goal
+  probability by 1–2 points and the glide path improves the bad case, but both give up a
+  lot of upside, so the average outcome falls. Which trade-off you prefer is a personal choice.
+* **Panic selling costs money on average.** Selling all stocks after a 30 % fall and buying
+  back a year later happens in about 1 in 4 futures and costs ≈ €5k on average when it does
+  (more with the historical-data generator), because the rebound is missed and the sale is taxed.
 
 ## Project layout
 

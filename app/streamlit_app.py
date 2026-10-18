@@ -16,6 +16,7 @@ pages = [
     st.Page(HERE / "views/explorer.py", title="Allocation explorer", icon="🧭"),
     st.Page(HERE / "views/etfs.py", title="ETFs & savings plan", icon="🧾"),
     st.Page(HERE / "views/goal.py", title="Goal planner", icon="🎯"),
+    st.Page(HERE / "views/stress.py", title="Stress & behaviour", icon="🌪️"),
     st.Page(HERE / "views/review.py", title="Annual review", icon="🗓️"),
     st.Page(HERE / "views/assumptions.py", title="Assumptions & history", icon="📚"),
 ]

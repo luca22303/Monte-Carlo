@@ -92,9 +92,15 @@ def show_flash() -> None:
 
 def setup_summary(cfg: SimConfig) -> str:
     """One line with the settings every page runs on."""
+    extras = []
+    if cfg.glide.enabled:
+        extras.append(f"glide → {cfg.glide.end_equity:.0%} over {cfg.glide.years}y")
+    if cfg.reevaluation.enabled:
+        extras.append(f"re-evaluation every {cfg.reevaluation.every_months}m")
     return (f"{cfg.plan.horizon_years} years · €{cfg.plan.monthly:,.0f}/month ({cfg.plan.growth}) · "
             f"{cfg.equity_share():.0%} equity · {cfg.strategy.label()} · "
-            f"{'German taxes' if cfg.tax.enabled else 'pre-tax'} · {cfg.n_paths:,} paths ({cfg.generator})")
+            + "".join(f"{e} · " for e in extras)
+            + f"{'German taxes' if cfg.tax.enabled else 'pre-tax'} · {cfg.n_paths:,} paths ({cfg.generator})")
 
 
 def scenario_key(cfg: SimConfig) -> str:
@@ -250,4 +256,36 @@ def box_by_variant(results: dict[str, SimResult], title: str) -> go.Figure:
     fig.update_layout(showlegend=False)
     fig = _layout(fig, title, "", "Net wealth after tax, today's € (1–99 % range)", height=80 + 60 * len(results))
     fig.update_yaxes(autorange="reversed")  # same order as the tables
+    return fig
+
+
+def equity_share_chart(results: dict[str, SimResult], title: str) -> go.Figure:
+    """Median equity share over time per variant (one line each, categorical colours in fixed order)."""
+    colors = cat()
+    fig = go.Figure()
+    for i, (label, res) in enumerate(results.items()):
+        if res.equity_share is None:
+            continue
+        years = (np.arange(res.months) + 1) / 12
+        fig.add_trace(go.Scatter(x=years, y=np.median(res.equity_share, axis=0), mode="lines", name=label,
+                                 line={"color": colors[i % len(colors)], "width": 2},
+                                 hovertemplate=label + ": %{y:.0%} in year %{x:.1f}<extra></extra>"))
+    fig = _layout(fig, title, "Equity share", "Years from now", height=360)
+    fig.update_yaxes(tickformat=".0%", rangemode="tozero")
+    return fig
+
+
+def equity_band_chart(res: SimResult, title: str = "Equity share over time") -> go.Figure:
+    """Median and 10-90 % band of the equity share of one simulation."""
+    s = seq()
+    years = (np.arange(res.months) + 1) / 12
+    q10, q50, q90 = np.percentile(res.equity_share, [10, 50, 90], axis=0)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=years, y=q90, line={"width": 0}, hoverinfo="skip", showlegend=False))
+    fig.add_trace(go.Scatter(x=years, y=q10, fill="tonexty", fillcolor=s["100"], line={"width": 0},
+                             name="10–90 % of futures", hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=years, y=q50, line={"color": s["600"], "width": 2}, name="Median",
+                             hovertemplate="Year %{x:.1f}: %{y:.0%} equity<extra></extra>"))
+    fig = _layout(fig, title, "Equity share", "Years from now", height=320)
+    fig.update_yaxes(tickformat=".0%", rangemode="tozero")
     return fig

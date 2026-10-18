@@ -16,8 +16,8 @@ sys.path.insert(0, str(APP))
 SMALL = SimConfig(n_paths=1000, plan=SavingsPlan(horizon_years=25)).model_dump_json()
 
 
-@pytest.mark.parametrize("page", ["setup", "simulation", "strategies", "explorer", "etfs", "goal", "review",
-                                  "assumptions"])
+@pytest.mark.parametrize("page", ["setup", "simulation", "strategies", "explorer", "etfs", "goal", "stress",
+                                  "review", "assumptions"])
 def test_page_renders(page):
     at = AppTest.from_file(str(APP / "views" / f"{page}.py"), default_timeout=240)
     at.session_state["cfg_json"] = SMALL
@@ -71,3 +71,23 @@ def test_pages_follow_setup():
     at.run()
     assert not at.exception, at.exception
     assert at.selectbox[0].value.endswith("(your setup)"), "baseline should be the setup's own policy"
+
+
+def test_dynamic_setup_pages():
+    from mcengine.config import GlidePath, Reevaluation
+
+    cfg = SimConfig.model_validate_json(SMALL).model_copy(update={
+        "glide": GlidePath(enabled=True), "reevaluation": Reevaluation(enabled=True, every_months=6)})
+    for page in ("simulation", "strategies", "stress"):
+        at = AppTest.from_file(str(APP / "views" / f"{page}.py"), default_timeout=400)
+        at.session_state["cfg_json"] = cfg.model_dump_json()
+        at.run()
+        assert not at.exception, (page, at.exception)
+
+
+def test_stress_all_crises_button():
+    at = AppTest.from_file(str(APP / "views" / "stress.py"), default_timeout=400)
+    at.session_state["cfg_json"] = SMALL
+    at.run()
+    next(b for b in at.button if b.label == "Run all crises").click().run()
+    assert not at.exception, at.exception

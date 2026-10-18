@@ -57,12 +57,20 @@ def generate_bootstrap(cfg: SimConfig) -> ScenarioSet:
         li = li - li.mean() + tgt["log_inflation"]
         ly = ly - ly.mean() + tgt["long_yield"]
 
-    returns = np.expm1(lr[idx]).astype(np.float32)
+    lr_paths, li_paths = lr[idx], li[idx]  # [P, T, A], [P, T]
+    sh = cfg.market.parameter_shifts(cfg.n_paths, cfg.seed)
+    kinds = np.array([a.kind for a in cfg.assets])
+    asset_shift = (np.where(kinds == "equity", sh["equity"][:, None], 0.0)
+                   + np.where(kinds == "gold", sh["gold"][:, None], 0.0) + sh["inflation"][:, None])
+    lr_paths = lr_paths + (asset_shift / 12.0)[:, None, :]
+    li_paths = li_paths + (sh["inflation"] / 12.0)[:, None]
+
+    returns = np.expm1(lr_paths).astype(np.float32)
     adjusted = ", mean-adjusted" if cfg.bootstrap_mean_adjust else ""
     return ScenarioSet(
         asset_keys=hist.asset_keys,
         returns=np.maximum(returns, -0.99),
-        inflation=np.expm1(li[idx]),
+        inflation=np.expm1(li_paths),
         long_yield=ly[idx],
         source=f"bootstrap ({hist.dates[0]:%Y-%m}–{hist.dates[-1]:%Y-%m}, "
                f"blocks ~{cfg.bootstrap_block_months:g}m{adjusted})",

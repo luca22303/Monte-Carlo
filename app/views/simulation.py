@@ -1,6 +1,17 @@
 import numpy as np
 import streamlit as st
-from common import eur, fan_chart, get_cfg, histogram, kpi_row, metrics_table, run, scenarios, setup_summary
+from common import (
+    equity_band_chart,
+    eur,
+    fan_chart,
+    get_cfg,
+    histogram,
+    kpi_row,
+    metrics_table,
+    run,
+    scenarios,
+    setup_summary,
+)
 
 from mcengine.metrics import max_drawdown, real_contributions
 
@@ -24,6 +35,15 @@ c[0].plotly_chart(histogram(res.real_final_net(), "Where you end up (after tax, 
                             "Net wealth", markers), width="stretch")
 c[1].plotly_chart(histogram(max_drawdown(res.nav.astype(float)), "Worst fall from a peak during the plan",
                             "Max drawdown", pct=True), width="stretch")
+
+if res.equity_share is not None:
+    st.plotly_chart(equity_band_chart(res, "Equity share over time (after drift, rebalancing and dynamic rules)"),
+                    width="stretch")
+if cfg.reevaluation.enabled and res.switches is not None:
+    c = st.columns(3)
+    c[0].metric("Paths that switched at least once", f"{(res.switches > 0).mean():.0%}")
+    c[1].metric("Switches per path (avg.)", f"{res.switches.mean():.1f}")
+    c[2].metric("Time in defensive mix (avg.)", f"{res.defensive_months.mean() / res.months:.0%}")
 
 st.subheader("All metrics")
 st.dataframe(metrics_table({"This plan": s}), width="stretch")
