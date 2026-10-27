@@ -8,3 +8,4 @@ data/raw/
 reviews/
 .streamlit/secrets.toml
 my_data/
+logs/

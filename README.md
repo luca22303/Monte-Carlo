@@ -34,6 +34,22 @@ The dashboard opens at http://localhost:8501. On a Mac you can afterwards simply
 
 The historical panel (1973–2025) is bundled, so no network access is needed after installing.
 
+**Mac: app icon without a terminal window.** Run once in Terminal (inside the Monte-Carlo folder):
+
+```bash
+bash tools/macos/install.sh --autostart
+```
+
+* **App icon:** creates *Monte Carlo* in `~/Applications`, which you can drag to the Dock. A click checks for
+  updates, starts the dashboard in the background with no terminal window, and opens it in your
+  browser. If it is already running, it just opens the browser.
+* **Autostart:** `--autostart` also starts the dashboard at every login, so a plain browser bookmark to
+  `http://localhost:8501` always works. Leave the flag out for the app only.
+* **Stop:** "⏻ Quit dashboard" in the sidebar, or `bash tools/macos/stop.sh`.
+* **Remove:** `bash tools/macos/uninstall.sh`.
+* **Log:** `logs/dashboard.log`.
+* **Local only:** the dashboard listens only on your own computer (`localhost`), not on your network.
+
 **Your inputs are saved automatically** in `my_data/` inside this folder: the Setup, the ETF
 selection, the review holdings and a dated history of every annual review. They are loaded
 again on the next start. The folder stays on your computer and is git-ignored. Reset it on

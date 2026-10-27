@@ -19,4 +19,4 @@ echo "Installing/updating libraries (first run takes a minute)…"
 pip install -q -r requirements.txt
 
 echo "Starting the dashboard – it opens in your browser."
-exec streamlit run app/streamlit_app.py
+exec streamlit run app/streamlit_app.py --server.address localhost

@@ -27,6 +27,16 @@ with st.sidebar:
     st.caption(setup_summary(get_cfg()))
     st.page_link(pages[0], label="Change in Setup", icon="⚙️")
     st.caption("💾 Your inputs are saved automatically on this computer (folder *my_data*).")
+    with st.popover("⏻ Quit dashboard"):
+        st.caption("Stops the dashboard running in the background. Your inputs are saved. Start it again with "
+                   "the Monte Carlo app or start_dashboard.command.")
+        if st.button("Quit now", type="primary"):
+            import os
+            import signal
+            import threading
+
+            st.success("Dashboard stopped. You can close this tab.")
+            threading.Timer(1.0, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
     st.divider()
     st.caption(
         "Educational planning tool, not investment advice. Results are only as good as the assumptions; "
