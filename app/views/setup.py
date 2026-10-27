@@ -45,6 +45,22 @@ with st.form("setup"):
         raw[a.key] = col.number_input(a.name, 0.0, 100.0, round(100 * cfg.weights.get(a.key, 0) / sleeve, 1),
                                       5.0, key=f"w_{a.key}")
 
+    cash_asset = next((a for a in cfg.assets if a.kind == "cash"), None)
+    if cash_asset is not None:
+        c = st.columns([1.2, 1, 1.4])
+        own_rate = c[0].checkbox("My Tagesgeld account pays its own rate", cash_asset.rate_today is not None,
+                                 help="Off: cash earns the simulated money-market rate "
+                                      f"({cfg.market.short_rate_start:.1%} today, about "
+                                      f"{cfg.market.short_rate_mean:.1%} long-run).")
+        rate_today = c[1].number_input("Interest today (% p.a.)", 0.0, 10.0,
+                                       100 * (cash_asset.rate_today if cash_asset.rate_today is not None else 0.024),
+                                       0.05, format="%.2f")
+        rate_modes = {False: "then moves with market rates (realistic)", True: "fixed for the whole plan"}
+        rate_fixed = c[2].radio("Afterwards", list(rate_modes), format_func=rate_modes.get,
+                                index=int(cash_asset.rate_fixed), horizontal=True,
+                                help="Tagesgeld rates follow the ECB: when rates fall, your 2.4 % falls too. "
+                                     "'Fixed' assumes today's rate for decades, which is optimistic.")
+
     st.subheader("Rebalancing strategy")
     kinds = {"hybrid": "Hybrid – steer savings, sell only outside wide bands (recommended)",
              "cashflow": "Cash-flow only – steer savings, never sell",
@@ -155,6 +171,10 @@ if submitted:
         weights = {eq_key: eq} | {k: (1 - eq) * v / total_raw for k, v in raw.items()}
         assets = [a.model_copy(update={"ter": float(t) / 100}) for a, t in
                   zip(cfg.assets, ter_df["TER % p.a."], strict=True)]
+        if cash_asset is not None:
+            assets = [a.model_copy(update={"rate_today": rate_today / 100 if own_rate else None,
+                                           "rate_fixed": bool(rate_fixed)}) if a.kind == "cash" else a
+                      for a in assets]
         market = cfg.market.model_copy(update=dict(
             equity_return=eq_ret, gold_return=gold_ret, cash_floor=cash_floor,
             equity_return_uncertainty=eq_unc, gold_return_uncertainty=gold_unc, inflation_mean_uncertainty=infl_unc,

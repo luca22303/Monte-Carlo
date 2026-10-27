@@ -155,6 +155,11 @@ def simulate(
     out_months = np.zeros(p, dtype=np.int32)
     eq_share = np.empty((p, t_total), dtype=np.float32)
 
+    # Cash accounts with their own rate: fixed, or market short rate plus today's spread.
+    cash_rules = [(i, a.rate_fixed, a.rate_today if a.rate_fixed
+                   else a.rate_today - max(cfg.market.short_rate_start, cfg.market.cash_floor))
+                  for i, a in enumerate(cfg.assets) if a.kind == "cash" and a.rate_today is not None]
+
     def base_target(t: int) -> np.ndarray:
         return scale_equity(w, is_eq, glide_equity(cfg, t, t_total)) if cfg.glide.enabled else w
 
@@ -204,7 +209,13 @@ def simulate(
                 ledger.add_sale(sale)
         v_pre = w_prev + invest
 
-        book.apply_returns(sc.returns[:, t, :], ter_m)
+        ret_t = sc.returns[:, t, :]
+        if cash_rules:
+            ret_t = ret_t.astype(float, copy=True)
+            for a_idx, fixed, rate in cash_rules:
+                ret_t[:, a_idx] = rate / 12.0 if fixed else np.maximum(ret_t[:, a_idx] + rate / 12.0,
+                                                                       cfg.market.cash_floor / 12.0)
+        book.apply_returns(ret_t, ter_m)
 
         if t < t_total - 1:
             forced = np.zeros(p, dtype=bool)

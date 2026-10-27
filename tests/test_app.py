@@ -91,3 +91,20 @@ def test_stress_all_crises_button():
     at.run()
     next(b for b in at.button if b.label == "Run all crises").click().run()
     assert not at.exception, at.exception
+
+
+def test_explorer_custom_allocation():
+    at = AppTest.from_file(str(APP / "views" / "explorer.py"), default_timeout=400)
+    at.session_state["cfg_json"] = SMALL
+    at.run()
+    at.multiselect[0].set_value([0.55])
+    at.selectbox[0].set_value(0.5)          # grid step
+    at.select_slider[0].set_value(500)      # paths per point
+    next(b for b in at.button if b.label == "Run simulations").click().run()
+    assert not at.exception, at.exception
+    custom = at.session_state["explore_custom"]
+    assert list(custom["label"]) == ["My mix"]
+    row = custom.iloc[0]
+    got = (row["w_equity"], row["w_gov_bonds"], row["w_gold"], row["w_cash"])
+    assert got == pytest.approx((0.55, 0.35, 0.05, 0.05))
+    assert any("Your own allocations" in h.value for h in at.subheader)

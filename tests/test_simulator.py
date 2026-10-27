@@ -86,3 +86,23 @@ def test_irr_negative_return():
     flows = np.full((2, t), 50.0)
     terminal = np.full(2, annuity_due_fv(50.0, r, t))
     np.testing.assert_allclose(money_weighted_irr(flows, terminal), (1 + r) ** 12 - 1, atol=1e-9)
+
+
+def test_cash_rate_today_fixed_and_market(frictionless):
+    from mcengine.config import AssetSpec, SimConfig
+
+    cash = AssetSpec(key="cash", name="Tagesgeld", kind="cash", ter=0.0, tax_class="interest")
+    base = SimConfig(assets=[cash], weights={"cash": 1.0}, strategy=StrategySpec(kind="buy_and_hold"),
+                     plan=frictionless.plan, costs=frictionless.costs, tax=frictionless.tax, n_paths=100)
+    sc = flat_scenarios(base, 0.022 / 12)  # market short rate 2.2 % p.a.
+    fixed_cash = cash.model_copy(update={"rate_today": 0.024, "rate_fixed": True})
+    fixed = base.model_copy(update={"assets": [fixed_cash]})
+    market = base.model_copy(update={"assets": [cash.model_copy(update={"rate_today": 0.024})]})
+    np.testing.assert_allclose(simulate(fixed, sc).wealth[:, -1],
+                               annuity_due_fv(1000, 0.024 / 12, base.months))
+    # market mode keeps the spread to today's short rate (2.2 % in the default market model)
+    spread = 0.024 - base.market.short_rate_start
+    np.testing.assert_allclose(simulate(market, sc).wealth[:, -1],
+                               annuity_due_fv(1000, 0.022 / 12 + spread / 12, base.months))
+    np.testing.assert_allclose(simulate(base, sc).wealth[:, -1],
+                               annuity_due_fv(1000, 0.022 / 12, base.months))

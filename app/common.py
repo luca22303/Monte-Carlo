@@ -159,6 +159,9 @@ def show_flash() -> None:
 def setup_summary(cfg: SimConfig) -> str:
     """One line with the settings every page runs on."""
     extras = []
+    cash = next((a for a in cfg.assets if a.kind == "cash" and a.rate_today is not None), None)
+    if cash is not None:
+        extras.append(f"Tagesgeld {cash.rate_today:.2%}{' fixed' if cash.rate_fixed else ' (then market)'}")
     if cfg.glide.enabled:
         extras.append(f"glide → {cfg.glide.end_equity:.0%} over {cfg.glide.years}y")
     if cfg.reevaluation.enabled:

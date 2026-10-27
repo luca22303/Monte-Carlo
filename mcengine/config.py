@@ -39,6 +39,10 @@ class AssetSpec(BaseModel):
     tax_class: TaxClass
     duration: float = Field(0.0, ge=0, description="Modified duration (bonds/linkers)")
     convexity: float = Field(0.0, ge=0)
+    # Cash only: your account's interest rate today (e.g. a Tagesgeld offer). None = market short rate.
+    rate_today: float | None = Field(None, ge=-0.02, le=0.15)
+    rate_fixed: bool = Field(False, description="True: rate_today for the whole horizon; False: "
+                                                "rate_today now, then the simulated short rate + same spread")
 
 
 def default_assets() -> list[AssetSpec]:

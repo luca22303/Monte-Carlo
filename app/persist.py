@@ -6,6 +6,7 @@ environment variable ``MC_DATA_DIR`` to use another folder; the tests do this.
 * ``config.json``          the Setup (every page runs on it)
 * ``etf_selection.json``   the ETF table on "ETFs & savings plan"
 * ``review_holdings.json`` the holdings table of the Annual review
+* ``explorer_custom.json`` your own allocations in the Allocation explorer
 * ``reviews/review_<date>.json``  one snapshot per day a review is run (history)
 
 Writes are atomic (temporary file, then rename), so a crash never leaves a half-written file.
@@ -20,7 +21,7 @@ from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = ("config.json", "etf_selection.json", "review_holdings.json")
+FILES = ("config.json", "etf_selection.json", "review_holdings.json", "explorer_custom.json")
 
 
 def data_dir() -> Path:
