@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import streamlit as st
-from common import get_cfg, setup_summary
+from common import get_cfg, setup_summary, show_flash
 
 HERE = Path(__file__).parent
 
@@ -26,10 +26,12 @@ with st.sidebar:
     st.markdown("**Active setup**")
     st.caption(setup_summary(get_cfg()))
     st.page_link(pages[0], label="Change in Setup", icon="⚙️")
+    st.caption("💾 Your inputs are saved automatically on this computer (folder *my_data*).")
     st.divider()
     st.caption(
         "Educational planning tool, not investment advice. Results are only as good as the assumptions; "
         "see *Assumptions & history*."
     )
 
+show_flash()
 nav.run()

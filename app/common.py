@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import persist  # noqa: E402
+
 from mcengine.config import SimConfig  # noqa: E402
 from mcengine.metrics import METRIC_LABELS, fan, fmt, real_contributions, summarize  # noqa: E402
 from mcengine.portfolio.simulator import SimResult, simulate  # noqa: E402
@@ -66,15 +68,77 @@ def background() -> str:
     return "#0e1117" if is_dark() else "#ffffff"
 
 
-# ----------------------------------------------------------------------------- state
+# ----------------------------------------------------------------------------- state (auto-saved)
 def get_cfg() -> SimConfig:
+    """The Setup. Loaded from ``my_data/config.json`` at the start of a session, if saved before."""
     if "cfg_json" not in st.session_state:
-        st.session_state["cfg_json"] = SimConfig().model_dump_json()
+        cfg = SimConfig()
+        saved = persist.load("config.json")
+        if saved is not None:
+            try:
+                cfg = SimConfig.model_validate(saved)
+            except Exception:  # saved by an incompatible version: keep defaults, tell the user
+                st.session_state["_flash_warning"] = ("Your saved setup could not be read (it was saved by an "
+                                                      "older version), so defaults are shown. Saving the Setup "
+                                                      "again overwrites it.")
+        st.session_state["cfg_json"] = cfg.model_dump_json()
     return SimConfig.model_validate_json(st.session_state["cfg_json"])
 
 
 def set_cfg(cfg: SimConfig) -> None:
     st.session_state["cfg_json"] = cfg.model_dump_json()
+    persist.save("config.json", json.loads(st.session_state["cfg_json"]))
+
+
+def get_etf_df() -> pd.DataFrame:
+    """ETF selection table; loaded from ``my_data/etf_selection.json`` if saved before."""
+    if "etf_df" not in st.session_state:
+        from mcengine.etfs import load_candidates
+
+        saved = persist.load("etf_selection.json")
+        df = load_candidates()
+        if saved:
+            try:
+                loaded = pd.DataFrame(saved)
+                needed = set(df.columns) - {"note"}
+                if needed <= set(loaded.columns):
+                    df = loaded.reindex(columns=df.columns)
+                    df["isin"] = df["isin"].fillna("").astype(str)
+                    df["note"] = df["note"].fillna("")
+            except (ValueError, TypeError):
+                pass
+        st.session_state["etf_df"] = df
+    return st.session_state["etf_df"]
+
+
+def set_etf_df(df: pd.DataFrame | None) -> None:
+    """Store (and save) the ETF selection; ``None`` resets it to the shipped examples."""
+    if df is None:
+        st.session_state.pop("etf_df", None)
+        (persist.data_dir() / "etf_selection.json").unlink(missing_ok=True)
+        return
+    st.session_state["etf_df"] = df
+    persist.save("etf_selection.json", json.loads(df.to_json(orient="records")))
+
+
+def get_review_holdings() -> dict | None:
+    if "review_holdings" not in st.session_state:
+        saved = persist.load("review_holdings.json")
+        if isinstance(saved, dict) and {"key", "Market value €", "Cost basis €"} <= set(saved):
+            st.session_state["review_holdings"] = saved
+    return st.session_state.get("review_holdings")
+
+
+def set_review_holdings(holdings: dict) -> None:
+    st.session_state["review_holdings"] = holdings
+    persist.save("review_holdings.json", holdings)
+
+
+def reset_saved_data(keep_reviews: bool = True) -> None:
+    """Delete saved files and forget them in this session."""
+    persist.reset(keep_reviews)
+    for k in ("cfg_json", "etf_df", "review_holdings", "review_result", "etf_costs_result", "explore_df"):
+        st.session_state.pop(k, None)
 
 
 def apply_cfg(cfg: SimConfig, message: str) -> None:
@@ -88,6 +152,8 @@ def show_flash() -> None:
     """Show the confirmation left by :func:`apply_cfg` before its rerun."""
     if msg := st.session_state.pop("_flash", None):
         st.success(msg)
+    if msg := st.session_state.pop("_flash_warning", None):
+        st.warning(msg)
 
 
 def setup_summary(cfg: SimConfig) -> str:

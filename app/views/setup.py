@@ -1,8 +1,9 @@
 import json
 
 import pandas as pd
+import persist
 import streamlit as st
-from common import apply_cfg, get_cfg, set_cfg, show_flash
+from common import apply_cfg, get_cfg, reset_saved_data, set_cfg, show_flash
 
 from mcengine.config import CostSpec, GlidePath, Reevaluation, SavingsPlan, SimConfig, StrategySpec, TaxDE
 from mcengine.review import latest_market_state
@@ -198,3 +199,21 @@ if up is not None and st.session_state.get("_loaded_name") != up.name + str(up.s
         st.rerun()
     except Exception as e:
         st.error(f"Could not load config: {e}")
+
+st.subheader("Saved data")
+files = persist.saved_files()
+st.markdown(
+    f"Everything you enter is **saved automatically** on this computer in `{persist.data_dir()}` and loaded again "
+    "the next time you start the dashboard. Nothing is uploaded; the folder is excluded from Git."
+)
+st.caption("Saved now: " + (", ".join(files) if files else "nothing yet (defaults are shown)."))
+c = st.columns(2)
+if c[0].button("Reset settings to defaults", help="Deletes the saved Setup, ETF selection and review holdings. "
+                                                  "Your review history is kept."):
+    reset_saved_data(keep_reviews=True)
+    st.session_state["_flash"] = "Settings reset to defaults. Your review history was kept."
+    st.rerun()
+if c[1].button("Delete all saved data", help="Also deletes the review history."):
+    reset_saved_data(keep_reviews=False)
+    st.session_state["_flash"] = "All saved data deleted."
+    st.rerun()

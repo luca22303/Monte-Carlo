@@ -1,7 +1,20 @@
+import json
+
 import pandas as pd
+import persist
 import plotly.graph_objects as go
 import streamlit as st
-from common import _layout, cat, eur, fan_chart, get_cfg, kpi_row
+from common import (
+    _layout,
+    cat,
+    eur,
+    fan_chart,
+    get_cfg,
+    get_etf_df,
+    get_review_holdings,
+    kpi_row,
+    set_review_holdings,
+)
 
 from mcengine.broker_import import parse_depot_csv, template_csv
 from mcengine.etfs import load_candidates
@@ -21,14 +34,14 @@ kinds = {a.key: a.kind for a in assets}
 
 
 def current_holdings() -> dict:
-    return st.session_state.get("review_holdings") or {
+    return get_review_holdings() or {
         "Asset": [a.name for a in assets], "key": [a.key for a in assets],
         "Market value €": [round(50_000 * cfg.weights.get(a.key, 0), 2) for a in assets],
         "Cost basis €": [round(45_000 * cfg.weights.get(a.key, 0), 2) for a in assets],
     }
 
 
-with st.expander("📥 Import holdings from your broker (CSV)", expanded="review_holdings" not in st.session_state):
+with st.expander("📥 Import holdings from your broker (CSV)", expanded=get_review_holdings() is None):
     st.markdown(
         "Export your **depot overview / positions** as CSV from your broker's website (often under *Depot → "
         "Export* or *Depotübersicht → CSV*) and upload it here. German and English exports are recognised "
@@ -41,8 +54,7 @@ with st.expander("📥 Import holdings from your broker (CSV)", expanded="review
     c[1].download_button("Template (CSV)", template_csv(names), "depot_template.csv", "text/csv")
     if up is not None:
         cand = load_candidates()
-        if "etf_df" in st.session_state:
-            cand = pd.concat([st.session_state["etf_df"], cand])
+        cand = pd.concat([get_etf_df(), cand])
         isin_map = {i: k for i, k in zip(cand["isin"], cand["asset_key"], strict=True) if i}
         try:
             imported = parse_depot_csv(up.getvalue(), isin_map, kinds)
@@ -83,13 +95,13 @@ with st.expander("📥 Import holdings from your broker (CSV)", expanded="review
                 old_val = dict(zip(old["key"], old["Market value €"], strict=True))
                 old_bas = dict(zip(old["key"], old["Cost basis €"], strict=True))
                 # Classes not in the depot (typically Tagesgeld) keep what was entered by hand
-                st.session_state["review_holdings"] = {
+                set_review_holdings({
                     "Asset": [a.name for a in assets], "key": [a.key for a in assets],
                     "Market value €": [round(float(tot["value"].get(a.key, old_val.get(a.key, 0.0))), 2)
                                        for a in assets],
                     "Cost basis €": [round(float(tot["basis"].get(a.key, old_bas.get(a.key, 0.0))), 2)
                                      for a in assets],
-                }
+                })
                 st.session_state.pop("review_result", None)
                 missing = [names[a.key] for a in assets if a.key not in tot.index and cfg.weights.get(a.key, 0) > 0]
                 st.session_state["review_import_note"] = (
@@ -110,6 +122,21 @@ with st.form("review"):
     sim = c[2].checkbox("Simulate forward from today", True)
     submitted = st.form_submit_button("Run review", type="primary")
 
+history = persist.list_reviews()  # past reviews, also without a new run
+if history:
+    with st.expander(f"Review history ({len(history)} saved)"):
+        rows = []
+        for path in history:
+            data = persist.load(f"reviews/{path.name}") or {}
+            r = data.get("review", {})
+            w = r.get("weights", {})
+            rows.append({"Date": r.get("date", path.stem[7:]), "Portfolio": eur(r.get("total", 0.0)),
+                         "Equity share": f"{w.get('equity', 0.0):.0%}" if w else "–",
+                         "Outside band": "yes" if r.get("band_breached") else "no",
+                         "P(goal)": f"{r.get('summary', {}).get('p_goal', float('nan')):.0%}"
+                         if r.get("summary") else "–"})
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+
 # A review computed under different Setup settings no longer applies.
 if st.session_state.get("review_cfg") != cfg.model_dump_json():
     st.session_state.pop("review_result", None)
@@ -117,11 +144,14 @@ if not submitted and "review_result" not in st.session_state:
     st.stop()
 if submitted:
     st.session_state["review_cfg"] = cfg.model_dump_json()
-    st.session_state["review_holdings"] = df.to_dict(orient="list")
+    set_review_holdings(df.to_dict(orient="list"))
     values = dict(zip(df["key"], df["Market value €"], strict=True))
     basis = dict(zip(df["key"], df["Cost basis €"], strict=True))
     with st.spinner("Reviewing…"):
         st.session_state["review_result"] = run_review(cfg, values, basis, int(years), allowance_left, sim)
+    saved_to = persist.save_review_snapshot({"review": json.loads(st.session_state["review_result"][0].to_json()),
+                                             "config": json.loads(cfg.model_dump_json())})
+    st.session_state["review_saved_to"] = saved_to.name
 
 out, res = st.session_state["review_result"]
 
@@ -171,3 +201,6 @@ if res is not None:
 
 st.download_button("Download review snapshot (JSON)", out.to_json(), f"review_{out.date}.json",
                    "application/json")
+
+if saved := st.session_state.get("review_saved_to"):
+    st.caption(f"💾 This review was saved to *my_data/reviews/{saved}* (one file per day).")

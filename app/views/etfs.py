@@ -1,7 +1,7 @@
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from common import _layout, apply_cfg, cat, eur, get_cfg, ink, scenarios, show_flash
+from common import _layout, apply_cfg, cat, eur, get_cfg, get_etf_df, ink, scenarios, set_etf_df, show_flash
 
 from mcengine.compare import run_variants
 from mcengine.etfs import (
@@ -12,7 +12,6 @@ from mcengine.etfs import (
     checklist,
     class_costs,
     gold_is_taxable,
-    load_candidates,
     missing_classes,
     savings_plan,
     with_costs,
@@ -33,9 +32,7 @@ st.caption(f"The example shortlist was checked against justETF on {CANDIDATES_AS
            "open each product's justETF link and check it before buying. These are examples, not personal advice. "
            "Add your own products in the last table row.")
 
-if "etf_df" not in st.session_state:
-    st.session_state["etf_df"] = load_candidates()
-base = st.session_state["etf_df"].copy()
+base = get_etf_df().copy()
 base["ter_pct"] = base["ter"].astype(float) * 100
 base["link"] = [JUSTETF_URL.format(i) if i else None for i in base["isin"]]
 
@@ -69,7 +66,7 @@ with st.form("etf_form"):
     reset = c[1].form_submit_button("Reset to examples")
 
 if reset:
-    st.session_state["etf_df"] = load_candidates()
+    set_etf_df(None)
     st.session_state.pop("etf_costs_result", None)
     st.rerun()
 if saved:
@@ -82,11 +79,11 @@ if saved:
     df_new["share_pct"] = df_new["share_pct"].fillna(100.0)
     df_new["note"] = df_new["note"].fillna("")
     df_new = df_new.dropna(subset=["asset_key"])
-    st.session_state["etf_df"] = df_new.drop(columns=["ter_pct", "link"])
+    set_etf_df(df_new.drop(columns=["ter_pct", "link"]))
     st.session_state.pop("etf_costs_result", None)
     st.rerun()
 
-df = st.session_state["etf_df"]
+df = get_etf_df()
 missing = missing_classes(df, cfg)
 if missing:
     st.warning("No product selected for: " + ", ".join(names[k] for k in missing) + ". Tick **Use** for one product "

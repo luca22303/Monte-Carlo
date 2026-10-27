@@ -34,6 +34,12 @@ The dashboard opens at http://localhost:8501. On a Mac you can afterwards simply
 
 The historical panel (1973–2025) is bundled, so no network access is needed after installing.
 
+**Your inputs are saved automatically** in `my_data/` inside this folder: the Setup, the ETF
+selection, the review holdings and a dated history of every annual review. They are loaded
+again on the next start. The folder stays on your computer and is git-ignored. Reset it on
+the Setup page under "Saved data". On Streamlit Community Cloud the disk is temporary, so use
+"Download config" there.
+
 Development:
 
 ```bash

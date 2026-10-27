@@ -18,6 +18,12 @@ def flat_scenarios(cfg: SimConfig, monthly_returns, inflation: float = 0.0, long
     )
 
 
+@pytest.fixture(autouse=True)
+def _isolated_data_dir(tmp_path, monkeypatch):
+    """Keep the app's auto-save away from the real my_data/ folder."""
+    monkeypatch.setenv("MC_DATA_DIR", str(tmp_path / "my_data"))
+
+
 @pytest.fixture
 def frictionless() -> SimConfig:
     """Five-asset default universe without costs or taxes, 10 years, 1000/month."""
