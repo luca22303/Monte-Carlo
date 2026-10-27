@@ -32,7 +32,9 @@ with st.expander("📥 Import holdings from your broker (CSV)", expanded="review
     st.markdown(
         "Export your **depot overview / positions** as CSV from your broker's website (often under *Depot → "
         "Export* or *Depotübersicht → CSV*) and upload it here. German and English exports are recognised "
-        "automatically. No export available? Download the template, fill in one line per product, and upload it."
+        "automatically. A **transaction export** (e.g. Trade Republic *Transaktionsexport*) works too: "
+        "holdings, cost basis and cash balance are rebuilt from all bookings. No export available? Download the "
+        "template, fill in one line per product, and upload it."
     )
     c = st.columns([3, 1])
     up = c[0].file_uploader("Depot export (.csv)", type=["csv", "txt"])
@@ -52,9 +54,15 @@ with st.expander("📥 Import holdings from your broker (CSV)", expanded="review
             st.caption("Recognised columns: " + ", ".join(f"{k} → *{v}*" for k, v in imported.columns.items()))
             pos = imported.positions.copy()
             pos["asset_key"] = pos["asset_key"].fillna("")
+            if imported.kind == "transactions":
+                st.info("Values below use each product's **last trade price** (column *Price from*). Overwrite "
+                        "*Market value €* with today's value from your broker app for an accurate review; "
+                        "the cost basis is already exact (FIFO incl. fees).")
             edited = st.data_editor(
                 pos, hide_index=True, width="stretch", key=f"pos_{up.name}_{up.size}",
-                disabled=["isin", "name", "how"],
+                disabled=["isin", "name", "how", "shares", "price_date"],
+                column_order=["name", "isin", "shares", "price_date", "value", "basis", "asset_key", "how"]
+                if imported.kind == "transactions" else ["isin", "name", "value", "basis", "asset_key", "how"],
                 column_config={
                     "isin": "ISIN", "name": st.column_config.TextColumn("Product", width="large"),
                     "value": st.column_config.NumberColumn("Market value €", format="%.2f"),
@@ -62,6 +70,8 @@ with st.expander("📥 Import holdings from your broker (CSV)", expanded="review
                     "asset_key": st.column_config.SelectboxColumn(
                         "Asset class", options=[*names, "ignore"], help="'ignore' leaves a position out"),
                     "how": "Matched by",
+                    "shares": st.column_config.NumberColumn("Units", format="%.4f"),
+                    "price_date": "Price from",
                 })
             unassigned = edited["asset_key"].isin(["", None]) | edited["asset_key"].isna()
             if unassigned.any():

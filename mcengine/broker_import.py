@@ -55,9 +55,10 @@ KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
 
 @dataclass
 class ImportResult:
-    positions: pd.DataFrame            # isin, name, value, basis, asset_key, how
+    positions: pd.DataFrame            # isin, name, value, basis, asset_key, how (+ shares, price_date)
     columns: dict[str, str]            # field -> column name used
     warnings: list[str] = field(default_factory=list)
+    kind: str = "depot"                # "depot" (holdings overview) or "transactions" (rebuilt from bookings)
 
     def totals(self) -> tuple[dict[str, float], dict[str, float]]:
         """Market value and cost basis per asset class (unassigned/ignored positions excluded)."""
@@ -119,7 +120,11 @@ def read_table(raw: bytes) -> tuple[pd.DataFrame, str]:
     """Locate the header row (first line mentioning ISIN) and read the table. Returns (df, separator)."""
     text = _decode(raw)
     lines = text.splitlines()
-    header_idx = next((i for i, ln in enumerate(lines) if "isin" in ln.lower()), None)
+    def is_header(ln: str) -> bool:
+        low = ln.lower()
+        return "isin" in low or ("symbol" in low and "shares" in low)
+
+    header_idx = next((i for i, ln in enumerate(lines) if is_header(ln)), None)
     if header_idx is None:
         raise ValueError("no column named 'ISIN' found – is this a depot/position export?")
     header = lines[header_idx]
@@ -162,10 +167,120 @@ def guess_asset(name: str, kinds: dict[str, str]) -> str | None:
     return None
 
 
+# ----------------------------------------------------------------------------- transaction exports
+TX_REQUIRED = {"symbol", "shares", "amount", "type"}
+
+
+def is_transaction_export(df: pd.DataFrame) -> bool:
+    """Trade Republic style export: one row per booking with symbol (ISIN), shares and amount."""
+    cols = {c.strip().lower() for c in df.columns}
+    return TX_REQUIRED <= cols and ("category" in cols or "transaction_id" in cols)
+
+
+def parse_transactions(df: pd.DataFrame, isin_map: dict[str, str], kinds: dict[str, str]) -> ImportResult:
+    """Rebuild holdings from a transaction export.
+
+    * Units per ISIN = sum of all share changes of trades (buys +, sells -).
+    * Cost basis = FIFO over the purchase lots, purchase fees included (German tax rule).
+    * Market value = units x the most recent trade price in the export. The export has no
+      current prices, so these are dated and should be overwritten with today's values.
+    * Cash = sum of amount + fee + tax over all bookings (card payments, transfers, interest,
+      dividends, trades...), i.e. the cash balance at the broker.
+    """
+    d = df.rename(columns={c: c.strip().lower() for c in df.columns}).copy()
+    num = {c: pd.to_numeric(d[c], errors="coerce").fillna(0.0) if c in d else pd.Series(0.0, index=d.index)
+           for c in ("shares", "price", "amount", "fee", "tax")}
+    when = d["datetime"] if "datetime" in d else d.get("date", pd.Series("", index=d.index))
+    order = when.fillna("").astype(str).sort_values(kind="stable").index
+    def text(col: str) -> pd.Series:
+        return d[col].fillna("").astype(str).str.strip() if col in d else pd.Series("", index=d.index)
+
+    isin, category, ttype = text("symbol").str.upper(), text("category").str.upper(), text("type").str.upper()
+    names, aclass = text("name"), text("asset_class").str.upper()
+    dates = text("date") if "date" in d else when.fillna("").astype(str).str[:10]
+
+    is_trade = ((category == "TRADING") | ttype.isin(["BUY", "SELL"])) & isin.str.match(ISIN_RE) \
+        & (num["shares"] != 0)
+    lots: dict[str, list[list[float]]] = {}
+    last_px: dict[str, tuple[float, str]] = {}
+    meta: dict[str, tuple[str, str]] = {}
+    n_trades = 0
+    for i in order:
+        if not is_trade[i]:
+            continue
+        n_trades += 1
+        code, sh = isin[i], float(num["shares"][i])
+        meta[code] = (names[i], aclass[i])
+        if num["price"][i] > 0:
+            last_px[code] = (float(num["price"][i]), dates[i])
+        book = lots.setdefault(code, [])
+        if sh > 0:
+            book.append([sh, max(-(num["amount"][i] + num["fee"][i]), 0.0)])
+        else:
+            q = -sh
+            while q > 1e-12 and book:
+                take = min(q, book[0][0])
+                book[0][1] *= 1.0 - take / book[0][0]
+                book[0][0] -= take
+                q -= take
+                if book[0][0] <= 1e-12:
+                    book.pop(0)
+    if n_trades == 0:
+        raise ValueError("the transaction export contains no buy or sell trades with an ISIN")
+
+    equity_key = next((k for k, kind in kinds.items() if kind == "equity"), None)
+    cash_key = next((k for k, kind in kinds.items() if kind == "cash"), None)
+    rows, stale = [], []
+    for code, book in lots.items():
+        units = sum(b[0] for b in book)
+        if units <= 1e-9:
+            continue  # fully sold
+        basis = sum(b[1] for b in book)
+        name, cls = meta[code]
+        px, px_date = last_px.get(code, (0.0, ""))
+        value = units * px if px > 0 else basis
+        stale.append(px_date)
+        key, how = isin_map.get(code), "ISIN match"
+        if key is None and cls == "STOCK" and equity_key:
+            key, how = equity_key, "single stock → equity"
+        elif key is None:
+            key = guess_asset(name, kinds)
+            how = "guessed from name – please check" if key else "unassigned"
+        rows.append({"isin": code, "name": name, "value": value, "basis": basis, "asset_key": key, "how": how,
+                     "shares": units, "price_date": px_date})
+    cash = float((num["amount"] + num["fee"] + num["tax"]).sum())
+    if abs(cash) > 0.005:
+        rows.append({"isin": "", "name": "Cash balance at the broker", "value": cash, "basis": cash,
+                     "asset_key": cash_key, "how": "sum of all bookings", "shares": float("nan"),
+                     "price_date": ""})
+    columns = ["isin", "name", "value", "basis", "asset_key", "how", "shares", "price_date"]
+    pos = pd.DataFrame(rows, columns=columns)
+
+    first, last = dates[order[0]], dates[order[-1]]
+    warnings = [
+        f"Transaction export recognised ({len(d)} bookings, {n_trades} trades, {first} to {last}). "
+        "Holdings and FIFO cost basis were rebuilt from the trades. **The export contains no current "
+        "prices:** market values use each product's last trade price (see 'Price from'). Overwrite them "
+        "with today's values from your app.",
+    ]
+    if cash < 0:
+        warnings.append("The computed cash balance is negative; check the export covers your whole history.")
+    if pos["asset_key"].isna().any():
+        n = int(pos["asset_key"].isna().sum())
+        warnings.append(f"{n} position(s) could not be assigned to an asset class.")
+    cols = {"isin": "symbol", "name": "name", "quantity": "shares", "price": "price",
+            "basis": "amount + fee (FIFO)"}
+    return ImportResult(pos, cols, warnings, kind="transactions")
+
+
 # ----------------------------------------------------------------------------- main entry
 def parse_depot_csv(raw: bytes, isin_map: dict[str, str], kinds: dict[str, str]) -> ImportResult:
-    """Parse a broker export. ``isin_map``: ISIN -> asset key; ``kinds``: asset key -> asset kind."""
+    """Parse a broker export: a holdings overview, or a transaction export (rebuilt into holdings).
+
+    ``isin_map``: ISIN -> asset key; ``kinds``: asset key -> asset kind."""
     df, sep = read_table(raw)
+    if is_transaction_export(df):
+        return parse_transactions(df, isin_map, kinds)
     cols = detect_columns(df)
     if "isin" not in cols:
         raise ValueError("could not identify the ISIN column")

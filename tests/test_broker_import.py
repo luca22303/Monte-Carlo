@@ -72,3 +72,32 @@ def test_detect_columns_does_not_confuse_wertpapierart():
     df = pd.DataFrame(columns=["Wertpapierart", "Bezeichnung", "ISIN", "Kurs (EUR)", "Stück"])
     cols = detect_columns(df)
     assert "value" not in cols and cols["price"] == "Kurs (EUR)" and cols["name"] == "Bezeichnung"
+
+
+def test_transaction_export_rebuilds_holdings_fifo_and_cash():
+    res = parse_depot_csv((DATA / "tr_transactions_sample.csv").read_bytes(), ISIN_MAP, KINDS)
+    assert res.kind == "transactions"
+    pos = res.positions.set_index("name")
+    # Example Corp: lots 2 @ 201 (incl. fee) and 2 @ 301; FIFO sale of 1 removes half of lot 1
+    ex = pos.loc["Example Corp"]
+    assert ex["shares"] == pytest.approx(3.0)
+    assert ex["basis"] == pytest.approx(100.5 + 301.0)
+    assert ex["value"] == pytest.approx(3 * 200.0) and ex["price_date"] == "2025-03-03"
+    assert ex["asset_key"] == "equity" and ex["how"] == "single stock → equity"
+    vw = pos.loc["Vanguard FTSE All-World UCITS ETF (USD) Acc"]
+    assert vw["shares"] == pytest.approx(2.0) and vw["basis"] == pytest.approx(210.0)
+    assert vw["value"] == pytest.approx(2 * 120.0) and vw["how"] == "ISIN match"
+    assert pd.isna(pos.loc["Dez. 2026", "asset_key"])  # unknown fund: user decides
+    assert "Gone Inc" not in pos.index  # fully sold
+    cash = (1000 - 201 - 301 + (200 - 1 - 10) - 150 - 50 - 11 + (12 - 1) + (3 - 0.79) - 25.5
+            + (1.2 - 0.32) - 60)
+    assert pos.loc["Cash balance at the broker", "value"] == pytest.approx(cash)
+    assert pos.loc["Cash balance at the broker", "asset_key"] == "cash"
+    assert any("no current prices" in w for w in res.warnings)
+
+
+def test_transaction_export_without_trades_raises():
+    raw = (b'"datetime","date","category","type","name","symbol","shares","price","amount","fee","tax"\n'
+           b'"2025-01-01T00:00:00Z","2025-01-01","CASH","CARD_TRANSACTION","Shop","","","","-5.0","",""\n')
+    with pytest.raises(ValueError, match="no buy or sell"):
+        parse_depot_csv(raw, ISIN_MAP, KINDS)
